@@ -152,6 +152,38 @@ function getDailyLevelIndex() {
   return Math.floor((Date.now() - epoch) / 86400000) % LEVEL_COUNT;
 }
 
+function clampLevelIndex(index) {
+  return Number.isInteger(index) ? Math.max(0, Math.min(index, LEVEL_COUNT - 1)) : 0;
+}
+
+function clampPuzzleIndex(index) {
+  return Number.isInteger(index) ? Math.max(0, Math.min(index, PUZZLES_PER_LEVEL - 1)) : 0;
+}
+
+export function getUnlockedLevelIndex(levelStars = {}) {
+  let index = 0;
+  while (index < LEVEL_COUNT - 1 && levelStars[index]) index++;
+  return index;
+}
+
+export function isLevelUnlocked(state, index) {
+  return clampLevelIndex(index) === index && index <= getUnlockedLevelIndex(state.levelStars);
+}
+
+export function getActiveLevelIndex(state) {
+  return clampLevelIndex(state.playLevelIndex ?? state.currentLevelIndex);
+}
+
+export function getActivePuzzleIndex(state) {
+  return clampPuzzleIndex(state.playPuzzleIndex ?? state.currentPuzzleIndex);
+}
+
+export function getDailyChallengeLevelIndex(state) {
+  const unlockedMax = getUnlockedLevelIndex(state.levelStars);
+  const rawDailyIndex = clampLevelIndex(state.dailyLevelIndex ?? getDailyLevelIndex());
+  return rawDailyIndex % (unlockedMax + 1);
+}
+
 function loadSaved() {
   try { return JSON.parse(localStorage.getItem('mattelek') ?? '{}'); }
   catch { return {}; }
@@ -171,10 +203,20 @@ function persist(state) {
 
 export function createGame() {
   const saved = loadSaved();
+  const levelStars = saved.levelStars ?? {};
+  const unlockedLevelIndex = getUnlockedLevelIndex(levelStars);
+  const savedLevelIndex = clampLevelIndex(saved.currentLevelIndex ?? 0);
+  const currentLevelIndex = Math.min(savedLevelIndex, unlockedLevelIndex);
+  const currentPuzzleIndex = savedLevelIndex === currentLevelIndex
+    ? clampPuzzleIndex(saved.currentPuzzleIndex ?? 0)
+    : 0;
   return {
     screen:             'home',
-    currentLevelIndex:  saved.currentLevelIndex  ?? 0,
-    currentPuzzleIndex: saved.currentPuzzleIndex ?? 0,
+    currentLevelIndex,
+    currentPuzzleIndex,
+    playLevelIndex:     currentLevelIndex,
+    playPuzzleIndex:    currentPuzzleIndex,
+    isDailyChallenge:   false,
     selectedPieces:     new Set(),
     feedback:           null,   // null | 'correct' | 'levelComplete' | 'wrong'
     hintText:           null,
@@ -182,7 +224,7 @@ export function createGame() {
     hintUsed:           false,
     levelWrongTotal:    0,      // accumulated across puzzles in current level
     levelHintTotal:     0,
-    levelStars:         saved.levelStars  ?? {},
+    levelStars,
     totalStars:         saved.totalStars  ?? 0,
     settings:           saved.settings   ?? { sound: true },
     parentUnlocked:     false,
@@ -191,7 +233,7 @@ export function createGame() {
 }
 
 export function getCurrentPuzzle(state) {
-  return generatePuzzle(state.currentLevelIndex, state.currentPuzzleIndex);
+  return generatePuzzle(getActiveLevelIndex(state), getActivePuzzleIndex(state));
 }
 
 export function selectPiece(state, index) {
@@ -212,7 +254,8 @@ export function submitAnswer(state) {
   const sum    = [...state.selectedPieces].reduce((s, i) => s + puzzle.pieces[i], 0);
 
   if (sum === puzzle.target) {
-    const isLastPuzzle = state.currentPuzzleIndex >= PUZZLES_PER_LEVEL - 1;
+    const activePuzzleIndex = getActivePuzzleIndex(state);
+    const isLastPuzzle = activePuzzleIndex >= PUZZLES_PER_LEVEL - 1;
 
     if (isLastPuzzle) {
       // Level complete — tally stats and award stars.
@@ -221,8 +264,9 @@ export function submitAnswer(state) {
       const stars = totalWrong === 0 && totalHints === 0 ? 3
                   : totalWrong <= 3 ? 2
                   : 1;
+      const activeLevelIndex = getActiveLevelIndex(state);
       const levelStars = { ...state.levelStars };
-      levelStars[state.currentLevelIndex] = Math.max(levelStars[state.currentLevelIndex] ?? 0, stars);
+      levelStars[activeLevelIndex] = Math.max(levelStars[activeLevelIndex] ?? 0, stars);
       const totalStars = Object.values(levelStars).reduce((a, b) => a + b, 0);
       const next = { ...state, feedback: 'levelComplete', levelStars, totalStars };
       persist(next);
@@ -249,10 +293,12 @@ export function requestHint(state) {
 
 // Advance to the next puzzle within the same level.
 export function nextPuzzle(state) {
+  const nextPuzzleIndex = getActivePuzzleIndex(state) + 1;
   const next = {
     ...state,
     screen:             'play',
-    currentPuzzleIndex: state.currentPuzzleIndex + 1,
+    currentPuzzleIndex: state.isDailyChallenge ? state.currentPuzzleIndex : nextPuzzleIndex,
+    playPuzzleIndex:    nextPuzzleIndex,
     selectedPieces:     new Set(),
     feedback:           null,
     hintText:           null,
@@ -267,12 +313,31 @@ export function nextPuzzle(state) {
 
 // Advance to the first puzzle of the next level.
 export function nextLevel(state) {
-  const nextLevelIndex = Math.min(state.currentLevelIndex + 1, LEVEL_COUNT - 1);
+  const activeLevelIndex = getActiveLevelIndex(state);
+  const nextLevelIndex = Math.min(activeLevelIndex + 1, LEVEL_COUNT - 1);
+  if (state.isDailyChallenge) {
+    const dailyNextLevelIndex = Math.min(nextLevelIndex, getUnlockedLevelIndex(state.levelStars));
+    return {
+      ...state,
+      screen:             'play',
+      playLevelIndex:     dailyNextLevelIndex,
+      playPuzzleIndex:    0,
+      selectedPieces:     new Set(),
+      feedback:           null,
+      hintText:           null,
+      wrongAttempts:      0,
+      hintUsed:           false,
+      levelWrongTotal:    0,
+      levelHintTotal:     0,
+    };
+  }
   const next = {
     ...state,
     screen:             'play',
     currentLevelIndex:  nextLevelIndex,
     currentPuzzleIndex: 0,
+    playLevelIndex:     nextLevelIndex,
+    playPuzzleIndex:    0,
     selectedPieces:     new Set(),
     feedback:           null,
     hintText:           null,
@@ -286,11 +351,16 @@ export function nextLevel(state) {
 }
 
 export function goToLevel(state, index) {
+  const fallbackIndex = Math.min(clampLevelIndex(state.currentLevelIndex), getUnlockedLevelIndex(state.levelStars));
+  const targetIndex = isLevelUnlocked(state, index) ? index : fallbackIndex;
   const next = {
     ...state,
     screen:             'play',
-    currentLevelIndex:  index,
+    currentLevelIndex:  targetIndex,
     currentPuzzleIndex: 0,
+    playLevelIndex:     targetIndex,
+    playPuzzleIndex:    0,
+    isDailyChallenge:   false,
     selectedPieces:     new Set(),
     feedback:           null,
     hintText:           null,
@@ -304,7 +374,32 @@ export function goToLevel(state, index) {
 }
 
 export function goToScreen(state, screen) {
-  return { ...state, screen, feedback: null, hintText: null };
+  return {
+    ...state,
+    screen,
+    playLevelIndex:   state.currentLevelIndex,
+    playPuzzleIndex:  state.currentPuzzleIndex,
+    isDailyChallenge: false,
+    feedback:         null,
+    hintText:         null,
+  };
+}
+
+export function goToDailyChallenge(state) {
+  return {
+    ...state,
+    screen:             'play',
+    playLevelIndex:     getDailyChallengeLevelIndex(state),
+    playPuzzleIndex:    0,
+    isDailyChallenge:   true,
+    selectedPieces:     new Set(),
+    feedback:           null,
+    hintText:           null,
+    wrongAttempts:      0,
+    hintUsed:           false,
+    levelWrongTotal:    0,
+    levelHintTotal:     0,
+  };
 }
 
 export function updateSetting(state, key, value) {

@@ -2,7 +2,8 @@
 import {
   createGame, getCurrentPuzzle, selectPiece, undoLast,
   submitAnswer, requestHint, nextPuzzle, nextLevel, goToLevel, goToScreen,
-  updateSetting, unlockParent, resetProgress, getSkillProgress,
+  goToDailyChallenge, updateSetting, unlockParent, resetProgress, getSkillProgress,
+  getActiveLevelIndex, getActivePuzzleIndex, isLevelUnlocked,
   LEVEL_COUNT, PUZZLES_PER_LEVEL, PIECE_COLORS, REWARD_GROUPS,
 } from './engine/game.js';
 
@@ -209,9 +210,11 @@ function renderHome() {
 
 function renderPlay() {
   const puzzle      = getCurrentPuzzle(state);
-  const levelNum    = state.currentLevelIndex + 1;
-  const puzzleNum   = state.currentPuzzleIndex + 1;
-  const earnedStars = state.levelStars[state.currentLevelIndex] ?? 0;
+  const activeLevelIndex = getActiveLevelIndex(state);
+  const activePuzzleIndex = getActivePuzzleIndex(state);
+  const levelNum    = activeLevelIndex + 1;
+  const puzzleNum   = activePuzzleIndex + 1;
+  const earnedStars = state.levelStars[activeLevelIndex] ?? 0;
   const isCorrect   = state.feedback === 'correct' || state.feedback === 'levelComplete';
 
   const starsHtml = `<span class="star-display">
@@ -221,8 +224,8 @@ function renderPlay() {
   // 10 progress dots for puzzles within the current level.
   const dotsHtml = `<div class="progress-dots">
     ${Array.from({ length: PUZZLES_PER_LEVEL }, (_, i) => {
-      const done    = i < state.currentPuzzleIndex || (isCorrect && i === state.currentPuzzleIndex);
-      const current = !done && i === state.currentPuzzleIndex;
+      const done    = i < activePuzzleIndex || (isCorrect && i === activePuzzleIndex);
+      const current = !done && i === activePuzzleIndex;
       return `<span class="pdot${done ? ' done' : current ? ' current' : ''}"></span>`;
     }).join('')}
   </div>`;
@@ -233,7 +236,7 @@ function renderPlay() {
 
   let feedbackHtml = '';
   if (state.feedback === 'levelComplete') {
-    const stars = state.levelStars[state.currentLevelIndex] ?? 1;
+    const stars = state.levelStars[activeLevelIndex] ?? 1;
     feedbackHtml = `<div class="feedback feedback-level-complete">
       <span class="feedback-emoji">🏆</span>
       <span>Nivå ${levelNum} fullført!</span>
@@ -304,7 +307,7 @@ function renderLevelSelect() {
       <div class="level-grid">
         ${Array.from({ length: LEVEL_COUNT }, (_, i) => {
           const s      = state.levelStars[i] ?? 0;
-          const locked = i > state.currentLevelIndex && !state.levelStars[i];
+          const locked = !isLevelUnlocked(state, i);
           return `<button class="level-card${locked ? ' locked' : ''}${i === state.currentLevelIndex ? ' current' : ''}"
                     data-action="goto-level" data-level="${i}" ${locked ? 'disabled' : ''}>
             <div class="level-card-num">${i + 1}</div>
@@ -603,7 +606,7 @@ function handleAction(action, el) {
       break;
 
     case 'daily':
-      setState(goToLevel(state, state.dailyLevelIndex));
+      setState(goToDailyChallenge(state));
       break;
 
     case 'nav-rewards':
