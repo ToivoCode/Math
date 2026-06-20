@@ -3,7 +3,7 @@ import {
   createGame, getCurrentPuzzle, selectPiece, undoLast,
   submitAnswer, requestHint, nextPuzzle, nextLevel, goToLevel, goToScreen,
   updateSetting, unlockParent, resetProgress, getSkillProgress,
-  LEVEL_COUNT, PUZZLES_PER_LEVEL, PIECE_COLORS,
+  LEVEL_COUNT, PUZZLES_PER_LEVEL, PIECE_COLORS, REWARD_GROUPS,
 } from './engine/game.js';
 
 let state = createGame();
@@ -376,30 +376,22 @@ function renderProgress() {
 }
 
 function renderRewards() {
-  const total = state.totalStars;
+  const totalRewards = REWARD_GROUPS.reduce((s, g) => s + g.items.length, 0);
+  const unlockedCount = REWARD_GROUPS.reduce((s, g) =>
+    s + g.items.filter(r => r.unlockLevel === 0 || !!state.levelStars[r.unlockLevel - 1]).length, 0);
 
-  const avatars = [
-    { stars: 0,  emoji: '🦊', name: 'Rev'         },
-    { stars: 3,  emoji: '🐻', name: 'Bjørn'       },
-    { stars: 6,  emoji: '🐸', name: 'Frosk'       },
-    { stars: 10, emoji: '🦁', name: 'Løve'        },
-    { stars: 15, emoji: '🐉', name: 'Drage'       },
-    { stars: 25, emoji: '🦄', name: 'Enhjørning'  },
-  ];
+  // Next reward to unlock (motivational hint)
+  const allItems = REWARD_GROUPS.flatMap(g => g.items);
+  const nextReward = allItems
+    .filter(r => r.unlockLevel > 0 && !state.levelStars[r.unlockLevel - 1])
+    .sort((a, b) => a.unlockLevel - b.unlockLevel)[0];
 
-  const stickers = [
-    { stars: 0,  emoji: '⭐', name: 'Stjerne'  },
-    { stars: 5,  emoji: '🌈', name: 'Regnbue'  },
-    { stars: 10, emoji: '🎉', name: 'Konfetti' },
-    { stars: 20, emoji: '💎', name: 'Diamant'  },
-  ];
-
-  const rewardCard = ({ stars, emoji, name }) => {
-    const unlocked = total >= stars;
+  const rewardCard = (r) => {
+    const unlocked = r.unlockLevel === 0 || !!state.levelStars[r.unlockLevel - 1];
     return `<div class="reward-card${unlocked ? ' unlocked' : ' locked'}">
-      <div class="reward-emoji">${unlocked ? emoji : '🔒'}</div>
-      <div class="reward-name">${name}</div>
-      ${!unlocked ? `<div class="reward-req">${stars} ⭐</div>` : ''}
+      <div class="reward-emoji">${unlocked ? r.emoji : '\uD83D\uDD12'}</div>
+      <div class="reward-name">${r.name}</div>
+      ${!unlocked ? `<div class="reward-req">Niv\u00e5 ${r.unlockLevel}</div>` : ''}
     </div>`;
   };
 
@@ -407,18 +399,21 @@ function renderRewards() {
     <div class="screen screen-rewards">
       <header class="sub-header">
         <h2>Belønninger</h2>
-        <div class="stars-header">⭐ ${total}</div>
+        <div class="stars-header">${unlockedCount} / ${totalRewards}</div>
       </header>
 
-      <section class="rewards-section">
-        <div class="section-title">Figurer</div>
-        <div class="rewards-grid">${avatars.map(rewardCard).join('')}</div>
-      </section>
+      ${nextReward ? `<div class="next-reward-banner">
+        <span class="next-reward-label">Neste: </span>
+        <span class="next-reward-emoji">${nextReward.emoji}</span>
+        <span class="next-reward-name">${nextReward.name}</span>
+        <span class="next-reward-level">— fullfør nivå ${nextReward.unlockLevel}</span>
+      </div>` : `<div class="next-reward-banner next-reward-done">🏆 Alle belønninger funnet!</div>`}
 
+      ${REWARD_GROUPS.map(group => `
       <section class="rewards-section">
-        <div class="section-title">Klistremerker</div>
-        <div class="rewards-grid">${stickers.map(rewardCard).join('')}</div>
-      </section>
+        <div class="section-title">${group.title}</div>
+        <div class="rewards-grid">${group.items.map(rewardCard).join('')}</div>
+      </section>`).join('')}
     </div>
     ${renderBottomNav()}`;
 }

@@ -15,9 +15,13 @@ const TIERS = [
   { tMin: 25, tMax: 40, n: 8, connected: false }, // 7: Levels 71–80  (Expert)
 ];
 
-// Seeded PRNG (LCG) — same seed always yields the same puzzle.
+// Seeded PRNG (LCG) with warm-up to break correlation between similar seeds.
 function seededRand(seed) {
   let s = ((seed ^ 0xDEADBEEF) >>> 0) || 1;
+  // Three warm-up steps so seeds that differ by small amounts diverge quickly.
+  s = ((s * 1664525 + 1013904223) & 0xFFFFFFFF) >>> 0;
+  s = ((s * 1664525 + 1013904223) & 0xFFFFFFFF) >>> 0;
+  s = ((s * 1664525 + 1013904223) & 0xFFFFFFFF) >>> 0;
   return () => {
     s = ((s * 1664525 + 1013904223) & 0xFFFFFFFF) >>> 0;
     return s / 0x100000000;
@@ -26,25 +30,41 @@ function seededRand(seed) {
 
 // Generates a deterministic puzzle for a given (levelIndex, puzzleIndex) pair.
 export function generatePuzzle(levelIndex, puzzleIndex) {
-  const r    = seededRand(levelIndex * 997 + puzzleIndex * 31 + 17);
   const tier = Math.min(Math.floor(levelIndex / 10), TIERS.length - 1);
   const { tMin, tMax, n, connected } = TIERS[tier];
+  const range = tMax - tMin + 1;
 
-  const target = tMin + Math.floor(r() * (tMax - tMin + 1));
+  // ── Target selection ──────────────────────────────────────────────────────
+  // Shuffle every possible target for this level using a level-scoped seed,
+  // then assign targets round-robin. This guarantees that all different target
+  // values appear before any repeats — eliminating "always the same number".
+  const tr = seededRand(levelIndex * 49999 + 77777);
+  const targets = Array.from({ length: range }, (_, i) => tMin + i);
+  for (let i = range - 1; i > 0; i--) {
+    const j = Math.floor(tr() * (i + 1));
+    [targets[i], targets[j]] = [targets[j], targets[i]];
+  }
+  const target = targets[puzzleIndex % range];
 
-  // Build a guaranteed valid 2-piece solution: a + b = target, a ≠ b.
-  let a = 1 + Math.floor(r() * (target - 2)); // a ∈ [1, target-1]
-  if (a * 2 === target) a = a > 1 ? a - 1 : a + 1; // avoid a === b
+  // ── Piece generation ──────────────────────────────────────────────────────
+  // Seed incorporates the target so puzzles with the same index but different
+  // targets (across levels) still get distinct pieces.
+  const r = seededRand(levelIndex * 1000003 + puzzleIndex * 10007 + target * 101);
+
+  // Guaranteed 2-piece solution: a + b = target, a ≠ b, both in [1, target-1].
+  let a = 1 + Math.floor(r() * (target - 2));
+  if (a * 2 === target) a = a > 1 ? a - 1 : a + 1;
   const b = target - a;
 
-  // Fill remaining slots with distractor values (no repeats).
+  // Distractors: values in [1, target-1] — upper bound guarantees no single
+  // piece ever equals the target (prevents trivial one-tap solutions).
   const pieces = [a, b];
   const used   = new Set(pieces);
-  const maxVal = Math.max(Math.ceil(target * 0.85), 3);
+  const maxD   = Math.max(target - 1, 2);
   for (let slot = 2; slot < n; slot++) {
     let v, tries = 0;
-    do { v = 1 + Math.floor(r() * maxVal); tries++; } while (used.has(v) && tries < 30);
-    used.add(v);
+    do { v = 1 + Math.floor(r() * maxD); tries++; } while (used.has(v) && tries < 15);
+    used.add(v); // allow duplicate if no unique value found after 15 tries
     pieces.push(v);
   }
 
@@ -66,6 +86,61 @@ export const PIECE_COLORS = [
   { idle: '#EFF6FF', selected: '#0284C7', textIdle: '#374151', textSelected: '#FFFFFF' },
   { idle: '#FFF1F2', selected: '#DC2626', textIdle: '#374151', textSelected: '#FFFFFF' },
   { idle: '#FFF7ED', selected: '#EA580C', textIdle: '#374151', textSelected: '#FFFFFF' },
+];
+
+// Rewards unlocked by completing specific levels (1-indexed; 0 = always unlocked).
+// Spread ~2 rewards per 2 levels across all 80 levels.
+export const REWARD_GROUPS = [
+  {
+    title: 'Dyr og venner',
+    items: [
+      { emoji: '🦊', name: 'Rev',         unlockLevel: 0  },
+      { emoji: '🐱', name: 'Katt',        unlockLevel: 1  },
+      { emoji: '🐶', name: 'Hund',        unlockLevel: 3  },
+      { emoji: '🐭', name: 'Mus',         unlockLevel: 5  },
+      { emoji: '🐰', name: 'Kanin',       unlockLevel: 7  },
+      { emoji: '🐹', name: 'Hamster',     unlockLevel: 9  },
+      { emoji: '🐼', name: 'Panda',       unlockLevel: 11 },
+      { emoji: '🐸', name: 'Frosk',       unlockLevel: 13 },
+      { emoji: '🐻', name: 'Bjørn',       unlockLevel: 15 },
+      { emoji: '🦝', name: 'Vaskebjørn',  unlockLevel: 17 },
+      { emoji: '🐯', name: 'Tiger',       unlockLevel: 19 },
+      { emoji: '🐺', name: 'Ulv',         unlockLevel: 22 },
+      { emoji: '🐻‍❄️', name: 'Isbjørn', unlockLevel: 26 },
+      { emoji: '🦦', name: 'Oter',        unlockLevel: 30 },
+      { emoji: '🐨', name: 'Koala',       unlockLevel: 34 },
+      { emoji: '🦋', name: 'Sommerfugl',  unlockLevel: 38 },
+      { emoji: '🐙', name: 'Blekksprut',  unlockLevel: 42 },
+      { emoji: '🦁', name: 'Løve',        unlockLevel: 48 },
+      { emoji: '🐉', name: 'Drage',       unlockLevel: 58 },
+      { emoji: '🦄', name: 'Enhjørning',  unlockLevel: 70 },
+    ],
+  },
+  {
+    title: 'Godt og gøy',
+    items: [
+      { emoji: '⭐', name: 'Stjerne',     unlockLevel: 0  },
+      { emoji: '🍦', name: 'Iskrem',      unlockLevel: 2  },
+      { emoji: '🧇', name: 'Vaffel',      unlockLevel: 4  },
+      { emoji: '🍰', name: 'Kake',        unlockLevel: 6  },
+      { emoji: '🍪', name: 'Kjeks',       unlockLevel: 8  },
+      { emoji: '🍭', name: 'Pinnevaffel', unlockLevel: 10 },
+      { emoji: '🍩', name: 'Smultring',   unlockLevel: 12 },
+      { emoji: '🧁', name: 'Muffins',     unlockLevel: 14 },
+      { emoji: '🍫', name: 'Sjokolade',   unlockLevel: 16 },
+      { emoji: '🎂', name: 'Bursdag',     unlockLevel: 18 },
+      { emoji: '🍬', name: 'Godteri',     unlockLevel: 20 },
+      { emoji: '🫂', name: 'Klem',        unlockLevel: 24 },
+      { emoji: '🎀', name: 'Pynt',        unlockLevel: 28 },
+      { emoji: '🥧', name: 'Pai',         unlockLevel: 32 },
+      { emoji: '🌈', name: 'Regnbue',     unlockLevel: 36 },
+      { emoji: '🎉', name: 'Konfetti',    unlockLevel: 40 },
+      { emoji: '🌸', name: 'Blomst',      unlockLevel: 46 },
+      { emoji: '💎', name: 'Diamant',     unlockLevel: 55 },
+      { emoji: '👑', name: 'Krone',       unlockLevel: 65 },
+      { emoji: '🌟', name: 'Superstjerne', unlockLevel: 75 },
+    ],
+  },
 ];
 
 // All 15 puzzles across 4 difficulty tiers.

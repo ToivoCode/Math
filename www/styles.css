@@ -625,16 +625,41 @@ body {
   margin-left: auto;
   font-size: 1rem;
   font-weight: 900;
-  color: var(--c-accent);
+  color: var(--c-primary);
 }
+
+/* Next-reward motivational banner */
+.next-reward-banner {
+  margin: 8px 14px 0;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, var(--c-primary-soft), #FFF8F0);
+  border-radius: var(--r-lg);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  flex-wrap: wrap;
+}
+
+.next-reward-done {
+  background: linear-gradient(135deg, #D1FAE5, #A7F3D0);
+  color: #065F46;
+  justify-content: center;
+}
+
+.next-reward-label { color: var(--c-muted); }
+.next-reward-emoji { font-size: 1.3rem; }
+.next-reward-name  { color: var(--c-text); }
+.next-reward-level { color: var(--c-muted); font-size: 0.78rem; }
 
 .rewards-section { padding: 0 14px 4px; }
 .rewards-section .section-title { padding: 14px 0 10px; }
 
 .rewards-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
 }
 
 .reward-card {
