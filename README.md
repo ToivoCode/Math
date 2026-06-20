@@ -37,7 +37,9 @@ docs/
 
 ## Current scope
 
-- TBD as game design evolves.
+- 80 deterministic levels with 10 puzzles per level.
+- Targets grow from small early sums to 160 on level 80.
+- Generated puzzles require a varied mix of 2, 3, and 4 selected numbers.
 
 ## Notes
 

@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createGame,
+  generatePuzzle,
   getActiveLevelIndex,
   getActivePuzzleIndex,
   getDailyChallengeLevelIndex,
@@ -9,7 +10,31 @@ import {
   goToLevel,
   goToScreen,
   isLevelUnlocked,
+  LEVEL_COUNT,
+  PUZZLES_PER_LEVEL,
 } from '../www/src/engine/game.js';
+
+function minimumSolutionSize(puzzle) {
+  for (let size = 1; size <= puzzle.pieces.length; size++) {
+    let found = false;
+
+    function visit(start, remaining, sum) {
+      if (remaining === 0) {
+        if (sum === puzzle.target) found = true;
+        return;
+      }
+      if (found || sum >= puzzle.target) return;
+
+      for (let i = start; i < puzzle.pieces.length; i++) {
+        visit(i + 1, remaining - 1, sum + puzzle.pieces[i]);
+      }
+    }
+
+    visit(0, size, 0);
+    if (found) return size;
+  }
+  return null;
+}
 
 function withSavedState(savedState, fn) {
   const previousStorage = globalThis.localStorage;
@@ -87,5 +112,44 @@ describe('game rules', () => {
       assert.equal(getActiveLevelIndex(game), 0);
       assert.equal(getActivePuzzleIndex(game), 0);
     });
+  });
+
+  it('scales generated targets up to 160 on the final level', () => {
+    const finalTargets = Array.from({ length: PUZZLES_PER_LEVEL }, (_, puzzleIndex) =>
+      generatePuzzle(LEVEL_COUNT - 1, puzzleIndex).target
+    );
+
+    assert.equal(Math.max(...finalTargets), 160);
+    assert.deepEqual([...finalTargets].sort((a, b) => a - b), [151, 152, 153, 154, 155, 156, 157, 158, 159, 160]);
+  });
+
+  it('adds early variety with puzzles that require more than two numbers', () => {
+    const earlySolutionSizes = [];
+    for (let levelIndex = 0; levelIndex < 5; levelIndex++) {
+      for (let puzzleIndex = 0; puzzleIndex < PUZZLES_PER_LEVEL; puzzleIndex++) {
+        earlySolutionSizes.push(minimumSolutionSize(generatePuzzle(levelIndex, puzzleIndex)));
+      }
+    }
+
+    assert.ok(earlySolutionSizes.includes(2));
+    assert.ok(earlySolutionSizes.includes(3));
+  });
+
+  it('keeps generated puzzle solutions valid and varied across all levels', () => {
+    const solutionSizes = new Set();
+
+    for (let levelIndex = 0; levelIndex < LEVEL_COUNT; levelIndex++) {
+      for (let puzzleIndex = 0; puzzleIndex < PUZZLES_PER_LEVEL; puzzleIndex++) {
+        const puzzle = generatePuzzle(levelIndex, puzzleIndex);
+        const solutionSize = minimumSolutionSize(puzzle);
+        solutionSizes.add(solutionSize);
+
+        assert.ok(solutionSize >= 2 && solutionSize <= 4);
+        assert.ok(puzzle.pieces.length > solutionSize);
+        assert.ok(puzzle.pieces.every(piece => Number.isInteger(piece) && piece > 0 && piece < puzzle.target));
+      }
+    }
+
+    assert.deepEqual([...solutionSizes].sort((a, b) => a - b), [2, 3, 4]);
   });
 });

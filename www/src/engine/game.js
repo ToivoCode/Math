@@ -3,17 +3,9 @@
 export const LEVEL_COUNT       = 80;
 export const PUZZLES_PER_LEVEL = 10;
 
-// Difficulty tiers — each covers 10 levels (8 tiers × 10 = 80 levels).
-const TIERS = [
-  { tMin:  4, tMax:  9, n: 4, connected: false }, // 0: Levels  1–10  (Easy sums)
-  { tMin:  6, tMax: 12, n: 4, connected: false }, // 1: Levels 11–20
-  { tMin: 10, tMax: 16, n: 5, connected: false }, // 2: Levels 21–30  (Number bonds)
-  { tMin: 12, tMax: 20, n: 5, connected: false }, // 3: Levels 31–40
-  { tMin: 10, tMax: 20, n: 6, connected: true  }, // 4: Levels 41–50  (Connected pieces)
-  { tMin: 15, tMax: 25, n: 6, connected: false }, // 5: Levels 51–60  (Larger numbers)
-  { tMin: 20, tMax: 30, n: 7, connected: false }, // 6: Levels 61–70  (Challenge)
-  { tMin: 25, tMax: 40, n: 8, connected: false }, // 7: Levels 71–80  (Expert)
-];
+const FIRST_LEVEL_TARGET_MAX = 10;
+const FINAL_LEVEL_TARGET_MAX = 160;
+const MIN_TARGET = 4;
 
 // Seeded PRNG (LCG) with warm-up to break correlation between similar seeds.
 function seededRand(seed) {
@@ -28,51 +20,141 @@ function seededRand(seed) {
   };
 }
 
+function shuffleInPlace(items, r) {
+  for (let i = items.length - 1; i > 0; i--) {
+    const j = Math.floor(r() * (i + 1));
+    [items[i], items[j]] = [items[j], items[i]];
+  }
+  return items;
+}
+
+function getLevelTargetMax(levelIndex) {
+  const levelProgress = Math.max(0, Math.min(levelIndex, LEVEL_COUNT - 1)) / (LEVEL_COUNT - 1);
+  return Math.round(FIRST_LEVEL_TARGET_MAX + (FINAL_LEVEL_TARGET_MAX - FIRST_LEVEL_TARGET_MAX) * levelProgress);
+}
+
+function getTargetRange(levelIndex) {
+  const tMax = getLevelTargetMax(levelIndex);
+  const span = Math.min(PUZZLES_PER_LEVEL - 1, Math.max(6, Math.floor(tMax / 16)));
+  return { tMin: Math.max(MIN_TARGET, tMax - span), tMax };
+}
+
+function getSolutionSize(levelIndex, puzzleIndex, target) {
+  const earlyMix = [2, 2, 3, 2, 3, 2, 2, 3, 2, 2];
+  const middleMix = [2, 3, 2, 2, 3, 2, 4, 2, 3, 2];
+  const lateMix = [2, 3, 2, 4, 3, 2, 3, 4, 2, 3];
+  const expertMix = [3, 2, 4, 3, 2, 4, 3, 2, 4, 3];
+  const mix = levelIndex < 10 ? earlyMix
+            : levelIndex < 20 ? middleMix
+            : levelIndex < 50 ? lateMix
+            : expertMix;
+  const size = mix[(puzzleIndex + levelIndex) % mix.length];
+  if (size === 4 && target < 10) return 3;
+  return size;
+}
+
+function getPieceCount(levelIndex, solutionSize) {
+  const base = levelIndex < 10 ? 5
+             : levelIndex < 25 ? 6
+             : levelIndex < 50 ? 7
+             : 8;
+  return Math.min(8, Math.max(base, solutionSize + 2));
+}
+
+function hasSubsetSum(pieces, target, maxSize) {
+  function visit(start, remainingSize, sum) {
+    if (sum === target) return true;
+    if (sum > target || remainingSize === 0) return false;
+    for (let i = start; i < pieces.length; i++) {
+      if (visit(i + 1, remainingSize - 1, sum + pieces[i])) return true;
+    }
+    return false;
+  }
+
+  for (let size = 1; size <= maxSize; size++) {
+    if (visit(0, size, 0)) return true;
+  }
+  return false;
+}
+
+function makeSolutionParts(target, solutionSize, r) {
+  const parts = Array.from({ length: solutionSize }, () => 1);
+  let remaining = target - solutionSize;
+  while (remaining > 0) {
+    const slot = Math.floor(r() * solutionSize);
+    const chunk = 1 + Math.floor(r() * Math.min(remaining, Math.max(1, Math.ceil(target / (solutionSize * 2)))));
+    parts[slot] += chunk;
+    remaining -= chunk;
+  }
+  return shuffleInPlace(parts, r);
+}
+
+function canAddDistractor(pieces, value, target, solutionSize) {
+  if (!Number.isInteger(value) || value <= 0 || value >= target) return false;
+  return !hasSubsetSum([...pieces, value], target, solutionSize - 1);
+}
+
+function buildTwoPieceFallback(target, pieceCount, r) {
+  const pieces = makeSolutionParts(target, 2, r);
+  while (pieces.length < pieceCount) {
+    pieces.push(1 + Math.floor(r() * (target - 1)));
+  }
+  return shuffleInPlace(pieces, r);
+}
+
+function buildPieces(target, pieceCount, solutionSize, r) {
+  for (let attempt = 0; attempt < 30; attempt++) {
+    const pieces = makeSolutionParts(target, solutionSize, r);
+
+    while (pieces.length < pieceCount) {
+      let added = false;
+      const maxValue = target - 1;
+
+      for (let tries = 0; tries < 80; tries++) {
+        const candidate = 1 + Math.floor(r() * maxValue);
+        if (canAddDistractor(pieces, candidate, target, solutionSize)) {
+          pieces.push(candidate);
+          added = true;
+          break;
+        }
+      }
+
+      if (!added) {
+        for (let candidate = 1; candidate <= maxValue; candidate++) {
+          if (canAddDistractor(pieces, candidate, target, solutionSize)) {
+            pieces.push(candidate);
+            added = true;
+            break;
+          }
+        }
+      }
+
+      if (!added) break;
+    }
+
+    if (pieces.length === pieceCount) return shuffleInPlace(pieces, r);
+  }
+
+  return solutionSize > 2
+    ? buildPieces(target, pieceCount, solutionSize - 1, r)
+    : buildTwoPieceFallback(target, pieceCount, r);
+}
+
 // Generates a deterministic puzzle for a given (levelIndex, puzzleIndex) pair.
 export function generatePuzzle(levelIndex, puzzleIndex) {
-  const tier = Math.min(Math.floor(levelIndex / 10), TIERS.length - 1);
-  const { tMin, tMax, n, connected } = TIERS[tier];
+  const { tMin, tMax } = getTargetRange(levelIndex);
   const range = tMax - tMin + 1;
 
-  // ── Target selection ──────────────────────────────────────────────────────
-  // Shuffle every possible target for this level using a level-scoped seed,
-  // then assign targets round-robin. This guarantees that all different target
-  // values appear before any repeats — eliminating "always the same number".
   const tr = seededRand(levelIndex * 49999 + 77777);
   const targets = Array.from({ length: range }, (_, i) => tMin + i);
-  for (let i = range - 1; i > 0; i--) {
-    const j = Math.floor(tr() * (i + 1));
-    [targets[i], targets[j]] = [targets[j], targets[i]];
-  }
+  shuffleInPlace(targets, tr);
   const target = targets[puzzleIndex % range];
 
-  // ── Piece generation ──────────────────────────────────────────────────────
-  // Seed incorporates the target so puzzles with the same index but different
-  // targets (across levels) still get distinct pieces.
+  const solutionSize = getSolutionSize(levelIndex, puzzleIndex, target);
+  const pieceCount = getPieceCount(levelIndex, solutionSize);
   const r = seededRand(levelIndex * 1000003 + puzzleIndex * 10007 + target * 101);
-
-  // Guaranteed 2-piece solution: a + b = target, a ≠ b, both in [1, target-1].
-  let a = 1 + Math.floor(r() * (target - 2));
-  if (a * 2 === target) a = a > 1 ? a - 1 : a + 1;
-  const b = target - a;
-
-  // Distractors: values in [1, target-1] — upper bound guarantees no single
-  // piece ever equals the target (prevents trivial one-tap solutions).
-  const pieces = [a, b];
-  const used   = new Set(pieces);
-  const maxD   = Math.max(target - 1, 2);
-  for (let slot = 2; slot < n; slot++) {
-    let v, tries = 0;
-    do { v = 1 + Math.floor(r() * maxD); tries++; } while (used.has(v) && tries < 15);
-    used.add(v); // allow duplicate if no unique value found after 15 tries
-    pieces.push(v);
-  }
-
-  // Fisher-Yates shuffle.
-  for (let i = n - 1; i > 0; i--) {
-    const j = Math.floor(r() * (i + 1));
-    [pieces[i], pieces[j]] = [pieces[j], pieces[i]];
-  }
+  const pieces = buildPieces(target, pieceCount, solutionSize, r);
+  const connected = levelIndex >= 40 && levelIndex < 50;
 
   return { target, pieces, connected };
 }
