@@ -25,6 +25,8 @@
   --shadow-lg: 0 8px 32px rgba(0,0,0,0.15);
 
   --nav-h:    68px;
+  --nav-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --nav-total-h: calc(var(--nav-h) + var(--nav-safe-bottom));
   --font:     'Nunito', system-ui, sans-serif;
 }
 
@@ -97,15 +99,16 @@ body {
    ============================================================ */
 .bottom-nav {
   display: flex;
-  height: var(--nav-h);
+  height: var(--nav-total-h);
   background: var(--c-surface);
   border-top: 1.5px solid var(--c-border);
   flex-shrink: 0;
-  padding-bottom: env(safe-area-inset-bottom, 0);
+  padding-bottom: var(--nav-safe-bottom);
 }
 
 .nav-btn {
   flex: 1;
+  min-height: var(--nav-h);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -131,7 +134,7 @@ body {
    ============================================================ */
 .screen-home {
   background: linear-gradient(160deg, #EDE9FE 0%, #FFF8F0 55%);
-  padding-bottom: var(--nav-h);
+  padding-bottom: var(--nav-total-h);
 }
 
 .home-hero {
@@ -468,7 +471,7 @@ body {
    ============================================================ */
 .screen-levels {
   background: var(--c-bg);
-  padding-bottom: var(--nav-h);
+  padding-bottom: var(--nav-total-h);
 }
 
 .level-grid {
@@ -505,7 +508,7 @@ body {
    ============================================================ */
 .screen-progress {
   background: var(--c-bg);
-  padding-bottom: var(--nav-h);
+  padding-bottom: var(--nav-total-h);
   gap: 12px;
   padding-top: 4px;
 }
@@ -618,7 +621,7 @@ body {
    ============================================================ */
 .screen-rewards {
   background: var(--c-bg);
-  padding-bottom: var(--nav-h);
+  padding-bottom: var(--nav-total-h);
 }
 
 .stars-header {
@@ -694,7 +697,7 @@ body {
    ============================================================ */
 .screen-reward-detail {
   background: linear-gradient(160deg, #EDE9FE 0%, #FFF8F0 62%);
-  padding-bottom: var(--nav-h);
+  padding-bottom: var(--nav-total-h);
 }
 
 .reward-detail-main {
@@ -739,7 +742,7 @@ body {
    ============================================================ */
 .screen-parent {
   background: var(--c-bg);
-  padding-bottom: var(--nav-h);
+  padding-bottom: var(--nav-total-h);
 }
 
 .parent-gate {
