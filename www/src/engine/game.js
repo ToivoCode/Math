@@ -1,5 +1,62 @@
 // Game state, rules, and transitions — no DOM access.
 
+export const LEVEL_COUNT       = 80;
+export const PUZZLES_PER_LEVEL = 10;
+
+// Difficulty tiers — each covers 10 levels (8 tiers × 10 = 80 levels).
+const TIERS = [
+  { tMin:  4, tMax:  9, n: 4, connected: false }, // 0: Levels  1–10  (Easy sums)
+  { tMin:  6, tMax: 12, n: 4, connected: false }, // 1: Levels 11–20
+  { tMin: 10, tMax: 16, n: 5, connected: false }, // 2: Levels 21–30  (Number bonds)
+  { tMin: 12, tMax: 20, n: 5, connected: false }, // 3: Levels 31–40
+  { tMin: 10, tMax: 20, n: 6, connected: true  }, // 4: Levels 41–50  (Connected pieces)
+  { tMin: 15, tMax: 25, n: 6, connected: false }, // 5: Levels 51–60  (Larger numbers)
+  { tMin: 20, tMax: 30, n: 7, connected: false }, // 6: Levels 61–70  (Challenge)
+  { tMin: 25, tMax: 40, n: 8, connected: false }, // 7: Levels 71–80  (Expert)
+];
+
+// Seeded PRNG (LCG) — same seed always yields the same puzzle.
+function seededRand(seed) {
+  let s = ((seed ^ 0xDEADBEEF) >>> 0) || 1;
+  return () => {
+    s = ((s * 1664525 + 1013904223) & 0xFFFFFFFF) >>> 0;
+    return s / 0x100000000;
+  };
+}
+
+// Generates a deterministic puzzle for a given (levelIndex, puzzleIndex) pair.
+export function generatePuzzle(levelIndex, puzzleIndex) {
+  const r    = seededRand(levelIndex * 997 + puzzleIndex * 31 + 17);
+  const tier = Math.min(Math.floor(levelIndex / 10), TIERS.length - 1);
+  const { tMin, tMax, n, connected } = TIERS[tier];
+
+  const target = tMin + Math.floor(r() * (tMax - tMin + 1));
+
+  // Build a guaranteed valid 2-piece solution: a + b = target, a ≠ b.
+  let a = 1 + Math.floor(r() * (target - 2)); // a ∈ [1, target-1]
+  if (a * 2 === target) a = a > 1 ? a - 1 : a + 1; // avoid a === b
+  const b = target - a;
+
+  // Fill remaining slots with distractor values (no repeats).
+  const pieces = [a, b];
+  const used   = new Set(pieces);
+  const maxVal = Math.max(Math.ceil(target * 0.85), 3);
+  for (let slot = 2; slot < n; slot++) {
+    let v, tries = 0;
+    do { v = 1 + Math.floor(r() * maxVal); tries++; } while (used.has(v) && tries < 30);
+    used.add(v);
+    pieces.push(v);
+  }
+
+  // Fisher-Yates shuffle.
+  for (let i = n - 1; i > 0; i--) {
+    const j = Math.floor(r() * (i + 1));
+    [pieces[i], pieces[j]] = [pieces[j], pieces[i]];
+  }
+
+  return { target, pieces, connected };
+}
+
 // Color palette for wheel pieces (idle → selected)
 // Idle is near-white so unselected pieces look neutral; selected is vibrant.
 export const PIECE_COLORS = [
@@ -13,46 +70,26 @@ export const PIECE_COLORS = [
 
 // All 15 puzzles across 4 difficulty tiers.
 // Each puzzle is verified to have at least one valid sum combination.
-export const LEVELS = [
-  // Tier 1 — Easy addition (target < 10, 4 pieces)
-  { target: 7,  pieces: [3, 2, 4, 1],             connected: false, skill: 'addition'  },
-  { target: 5,  pieces: [2, 1, 3, 4],             connected: false, skill: 'addition'  },
-  { target: 8,  pieces: [5, 2, 3, 6],             connected: false, skill: 'addition'  },
-  { target: 6,  pieces: [4, 1, 2, 3],             connected: false, skill: 'addition'  },
-  { target: 9,  pieces: [3, 4, 2, 5],             connected: false, skill: 'addition'  },
-  // Tier 2 — Number bonds (target 10–20, 5–6 pieces)
-  { target: 10, pieces: [3, 7, 4, 6, 2],          connected: false, skill: 'bonds'     },
-  { target: 12, pieces: [5, 4, 8, 3, 7],          connected: false, skill: 'bonds'     },
-  { target: 15, pieces: [6, 9, 4, 3, 8],          connected: false, skill: 'bonds'     },
-  { target: 11, pieces: [5, 2, 8, 4, 6, 3],       connected: false, skill: 'bonds'     },
-  { target: 20, pieces: [8, 5, 7, 12, 3, 6],      connected: false, skill: 'bonds'     },
-  // Tier 3 — Connected pieces (adjacency visual guide, 6 pieces)
-  { target: 13, pieces: [4, 6, 3, 7, 2, 5],       connected: true,  skill: 'connected' },
-  { target: 16, pieces: [9, 4, 7, 2, 8, 5],       connected: true,  skill: 'connected' },
-  { target: 18, pieces: [6, 9, 3, 12, 5, 7],      connected: true,  skill: 'connected' },
-  // Tier 4 — Challenge (larger numbers, 7–8 pieces)
-  { target: 25, pieces: [8, 7, 10, 5, 12, 3, 6, 4],  connected: false, skill: 'challenge' },
-  { target: 30, pieces: [12, 8, 15, 7, 9, 6, 4, 11], connected: false, skill: 'challenge' },
-];
+export const LEVELS_LEGACY = []; // kept for test compatibility
 
-function getDailyIndex() {
+function getDailyLevelIndex() {
   const epoch = new Date('2024-01-01').getTime();
-  const days  = Math.floor((Date.now() - epoch) / 86400000);
-  return days % LEVELS.length;
+  return Math.floor((Date.now() - epoch) / 86400000) % LEVEL_COUNT;
 }
 
 function loadSaved() {
-  try { return JSON.parse(localStorage.getItem('sumwheels') ?? '{}'); }
+  try { return JSON.parse(localStorage.getItem('mattelek') ?? '{}'); }
   catch { return {}; }
 }
 
 function persist(state) {
   try {
-    localStorage.setItem('sumwheels', JSON.stringify({
-      currentLevelIndex: state.currentLevelIndex,
-      levelStars:        state.levelStars,
-      totalStars:        state.totalStars,
-      settings:          state.settings,
+    localStorage.setItem('mattelek', JSON.stringify({
+      currentLevelIndex:  state.currentLevelIndex,
+      currentPuzzleIndex: state.currentPuzzleIndex,
+      levelStars:         state.levelStars,
+      totalStars:         state.totalStars,
+      settings:           state.settings,
     }));
   } catch { /* storage unavailable */ }
 }
@@ -60,23 +97,26 @@ function persist(state) {
 export function createGame() {
   const saved = loadSaved();
   return {
-    screen:            'home',
-    currentLevelIndex: saved.currentLevelIndex ?? 0,
-    selectedPieces:    new Set(),
-    feedback:          null,   // null | 'correct' | 'wrong'
-    hintText:          null,
-    wrongAttempts:     0,
-    hintUsed:          false,
-    levelStars:        saved.levelStars  ?? {},
-    totalStars:        saved.totalStars  ?? 0,
-    settings:          saved.settings   ?? { sound: true },
-    parentUnlocked:    false,
-    dailyIndex:        getDailyIndex(),
+    screen:             'home',
+    currentLevelIndex:  saved.currentLevelIndex  ?? 0,
+    currentPuzzleIndex: saved.currentPuzzleIndex ?? 0,
+    selectedPieces:     new Set(),
+    feedback:           null,   // null | 'correct' | 'levelComplete' | 'wrong'
+    hintText:           null,
+    wrongAttempts:      0,      // wrong attempts for current puzzle
+    hintUsed:           false,
+    levelWrongTotal:    0,      // accumulated across puzzles in current level
+    levelHintTotal:     0,
+    levelStars:         saved.levelStars  ?? {},
+    totalStars:         saved.totalStars  ?? 0,
+    settings:           saved.settings   ?? { sound: true },
+    parentUnlocked:     false,
+    dailyLevelIndex:    getDailyLevelIndex(),
   };
 }
 
 export function getCurrentPuzzle(state) {
-  return LEVELS[state.currentLevelIndex];
+  return generatePuzzle(state.currentLevelIndex, state.currentPuzzleIndex);
 }
 
 export function selectPiece(state, index) {
@@ -97,15 +137,24 @@ export function submitAnswer(state) {
   const sum    = [...state.selectedPieces].reduce((s, i) => s + puzzle.pieces[i], 0);
 
   if (sum === puzzle.target) {
-    const stars = !state.hintUsed && state.wrongAttempts === 0 ? 3
-                : state.wrongAttempts <= 1 ? 2
-                : 1;
-    const levelStars = { ...state.levelStars };
-    levelStars[state.currentLevelIndex] = Math.max(levelStars[state.currentLevelIndex] ?? 0, stars);
-    const totalStars = Object.values(levelStars).reduce((a, b) => a + b, 0);
-    const next = { ...state, feedback: 'correct', levelStars, totalStars };
-    persist(next);
-    return next;
+    const isLastPuzzle = state.currentPuzzleIndex >= PUZZLES_PER_LEVEL - 1;
+
+    if (isLastPuzzle) {
+      // Level complete — tally stats and award stars.
+      const totalWrong = state.levelWrongTotal + state.wrongAttempts;
+      const totalHints = state.levelHintTotal + (state.hintUsed ? 1 : 0);
+      const stars = totalWrong === 0 && totalHints === 0 ? 3
+                  : totalWrong <= 3 ? 2
+                  : 1;
+      const levelStars = { ...state.levelStars };
+      levelStars[state.currentLevelIndex] = Math.max(levelStars[state.currentLevelIndex] ?? 0, stars);
+      const totalStars = Object.values(levelStars).reduce((a, b) => a + b, 0);
+      const next = { ...state, feedback: 'levelComplete', levelStars, totalStars };
+      persist(next);
+      return next;
+    }
+
+    return { ...state, feedback: 'correct' };
   }
 
   return { ...state, feedback: 'wrong', wrongAttempts: state.wrongAttempts + 1 };
@@ -123,17 +172,39 @@ export function requestHint(state) {
   return { ...state, hintText, hintUsed: true };
 }
 
-export function nextLevel(state) {
-  const nextIndex = (state.currentLevelIndex + 1) % LEVELS.length;
+// Advance to the next puzzle within the same level.
+export function nextPuzzle(state) {
   const next = {
     ...state,
-    screen:            'play',
-    currentLevelIndex: nextIndex,
-    selectedPieces:    new Set(),
-    feedback:          null,
-    hintText:          null,
-    wrongAttempts:     0,
-    hintUsed:          false,
+    screen:             'play',
+    currentPuzzleIndex: state.currentPuzzleIndex + 1,
+    selectedPieces:     new Set(),
+    feedback:           null,
+    hintText:           null,
+    wrongAttempts:      0,
+    hintUsed:           false,
+    levelWrongTotal:    state.levelWrongTotal + state.wrongAttempts,
+    levelHintTotal:     state.levelHintTotal  + (state.hintUsed ? 1 : 0),
+  };
+  persist(next);
+  return next;
+}
+
+// Advance to the first puzzle of the next level.
+export function nextLevel(state) {
+  const nextLevelIndex = Math.min(state.currentLevelIndex + 1, LEVEL_COUNT - 1);
+  const next = {
+    ...state,
+    screen:             'play',
+    currentLevelIndex:  nextLevelIndex,
+    currentPuzzleIndex: 0,
+    selectedPieces:     new Set(),
+    feedback:           null,
+    hintText:           null,
+    wrongAttempts:      0,
+    hintUsed:           false,
+    levelWrongTotal:    0,
+    levelHintTotal:     0,
   };
   persist(next);
   return next;
@@ -142,13 +213,16 @@ export function nextLevel(state) {
 export function goToLevel(state, index) {
   const next = {
     ...state,
-    screen:            'play',
-    currentLevelIndex: index,
-    selectedPieces:    new Set(),
-    feedback:          null,
-    hintText:          null,
-    wrongAttempts:     0,
-    hintUsed:          false,
+    screen:             'play',
+    currentLevelIndex:  index,
+    currentPuzzleIndex: 0,
+    selectedPieces:     new Set(),
+    feedback:           null,
+    hintText:           null,
+    wrongAttempts:      0,
+    hintUsed:           false,
+    levelWrongTotal:    0,
+    levelHintTotal:     0,
   };
   persist(next);
   return next;
@@ -170,15 +244,16 @@ export function unlockParent(state) {
 }
 
 export function resetProgress() {
-  try { localStorage.removeItem('sumwheels'); } catch { /* ignore */ }
+  try { localStorage.removeItem('mattelek'); } catch { /* ignore */ }
 }
 
 export function getSkillProgress(state) {
   const comp = Object.keys(state.levelStars).map(Number);
+  const pct  = (min, max) => Math.round((comp.filter(i => i >= min && i <= max).length / (max - min + 1)) * 100);
   return {
-    addition:  Math.round((comp.filter(i => i < 5).length / 5) * 100),
-    bonds:     Math.round((comp.filter(i => i >= 5 && i < 10).length / 5) * 100),
-    connected: Math.round((comp.filter(i => i >= 10 && i < 13).length / 3) * 100),
-    challenge: Math.round((comp.filter(i => i >= 13).length / 2) * 100),
+    addition:  pct(0,  19),
+    bonds:     pct(20, 39),
+    connected: pct(40, 49),
+    challenge: pct(50, 79),
   };
 }

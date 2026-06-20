@@ -272,6 +272,13 @@ body {
   gap: 10px;
 }
 
+.puzzle-counter {
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: var(--c-muted);
+  white-space: nowrap;
+}
+
 .level-info {
   display: flex;
   align-items: center;
@@ -395,10 +402,11 @@ body {
   to   { transform: scale(1);    opacity: 1; }
 }
 
-.feedback-correct { background: #D1FAE5; color: #065F46; }
-.feedback-wrong   { background: #FEE2E2; color: #7F1D1D; }
-.feedback-hint    { background: #FEF3C7; color: #78350F; }
-.feedback-empty   { background: transparent; }
+.feedback-correct      { background: #D1FAE5; color: #065F46; }
+.feedback-level-complete { background: linear-gradient(135deg,#D1FAE5,#A7F3D0); color: #065F46; border: 1.5px solid #6EE7B7; }
+.feedback-wrong        { background: #FEE2E2; color: #7F1D1D; }
+.feedback-hint         { background: #FEF3C7; color: #78350F; }
+.feedback-empty        { background: transparent; }
 .feedback-emoji   { font-size: 1.3rem; }
 
 /* Stars earned strip */
@@ -465,14 +473,14 @@ body {
 
 .level-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
-  padding: 16px;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  padding: 14px;
 }
 
 .level-card {
   aspect-ratio: 1;
-  border-radius: var(--r-md);
+  border-radius: var(--r-sm);
   border: 2px solid transparent;
   background: var(--c-surface);
   box-shadow: var(--shadow-sm);
@@ -481,16 +489,16 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
+  gap: 2px;
   font-family: inherit;
   transition: transform 0.12s;
 }
 
 .level-card:active        { transform: scale(0.93); }
 .level-card.current       { border-color: var(--c-primary); background: var(--c-primary-soft); }
-.level-card.locked        { opacity: 0.4; cursor: not-allowed; }
-.level-card-num           { font-size: 1.05rem; font-weight: 900; color: var(--c-text); }
-.level-card-stars         { font-size: 0.6rem; letter-spacing: 1px; }
+.level-card.locked        { opacity: 0.35; cursor: not-allowed; }
+.level-card-num           { font-size: 0.9rem; font-weight: 900; color: var(--c-text); }
+.level-card-stars         { font-size: 0.5rem; letter-spacing: 0; line-height: 1; }
 
 /* ============================================================
    Progress Screen

@@ -1,9 +1,9 @@
 // UI rendering and user action wiring
 import {
   createGame, getCurrentPuzzle, selectPiece, undoLast,
-  submitAnswer, requestHint, nextLevel, goToLevel, goToScreen,
+  submitAnswer, requestHint, nextPuzzle, nextLevel, goToLevel, goToScreen,
   updateSetting, unlockParent, resetProgress, getSkillProgress,
-  LEVELS, PIECE_COLORS,
+  LEVEL_COUNT, PUZZLES_PER_LEVEL, PIECE_COLORS,
 } from './engine/game.js';
 
 let state = createGame();
@@ -76,7 +76,7 @@ function renderWheel(puzzle, selected, feedback) {
     const c        = PIECE_COLORS[i % PIECE_COLORS.length];
 
     let fill, textColor;
-    if (feedback === 'correct' && selected.has(i)) {
+    if ((feedback === 'correct' || feedback === 'levelComplete') && selected.has(i)) {
       fill = '#16A34A'; textColor = '#FFFFFF';
     } else if (feedback === 'wrong' && selected.has(i)) {
       fill = '#FCA5A5'; textColor = '#7F1D1D';
@@ -95,16 +95,16 @@ function renderWheel(puzzle, selected, feedback) {
   }
 
   // Center circle & target number
-  const centerBg = feedback === 'correct' ? '#16A34A'
-                 : feedback === 'wrong'   ? '#EF4444'
+  const centerBg = (feedback === 'correct' || feedback === 'levelComplete') ? '#16A34A'
+                 : feedback === 'wrong' ? '#EF4444'
                  : '#7C3AED';
   const targetStr    = String(puzzle.target);
   const centerFontSz = targetStr.length > 1 ? 18 : 24;
   const centerCircle = `<circle cx="${cx}" cy="${cy}" r="${innerR}" fill="${centerBg}" />
     <text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="central" fill="white" font-size="${centerFontSz}" font-weight="900" font-family="'Nunito',sans-serif" style="pointer-events:none">${puzzle.target}</text>`;
 
-  const animClass = feedback === 'correct' ? ' wheel-correct'
-                  : feedback === 'wrong'   ? ' wheel-wrong'
+  const animClass = (feedback === 'correct' || feedback === 'levelComplete') ? ' wheel-correct'
+                  : feedback === 'wrong' ? ' wheel-wrong'
                   : '';
 
   return `<svg class="wheel-svg${animClass}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Tallhjul med ${n} deler">
@@ -200,18 +200,23 @@ function renderHome() {
 }
 
 function renderPlay() {
-  const puzzle   = getCurrentPuzzle(state);
-  const levelNum = state.currentLevelIndex + 1;
+  const puzzle      = getCurrentPuzzle(state);
+  const levelNum    = state.currentLevelIndex + 1;
+  const puzzleNum   = state.currentPuzzleIndex + 1;
   const earnedStars = state.levelStars[state.currentLevelIndex] ?? 0;
+  const isCorrect   = state.feedback === 'correct' || state.feedback === 'levelComplete';
 
   const starsHtml = `<span class="star-display">
     ${[1,2,3].map(n => `<span class="star">${earnedStars >= n ? '⭐' : '☆'}</span>`).join('')}
   </span>`;
 
+  // 10 progress dots for puzzles within the current level.
   const dotsHtml = `<div class="progress-dots">
-    ${LEVELS.map((_, i) =>
-      `<span class="pdot${i < state.currentLevelIndex ? ' done' : i === state.currentLevelIndex ? ' current' : ''}"></span>`
-    ).join('')}
+    ${Array.from({ length: PUZZLES_PER_LEVEL }, (_, i) => {
+      const done    = i < state.currentPuzzleIndex || (isCorrect && i === state.currentPuzzleIndex);
+      const current = !done && i === state.currentPuzzleIndex;
+      return `<span class="pdot${done ? ' done' : current ? ' current' : ''}"></span>`;
+    }).join('')}
   </div>`;
 
   const instruction = puzzle.connected
@@ -219,13 +224,18 @@ function renderPlay() {
     : `Finn tallene som gir <strong>${puzzle.target}</strong>`;
 
   let feedbackHtml = '';
-  if (state.feedback === 'correct') {
-    const selectedNums = [...state.selectedPieces].map(i => puzzle.pieces[i]);
+  if (state.feedback === 'levelComplete') {
     const stars = state.levelStars[state.currentLevelIndex] ?? 1;
+    feedbackHtml = `<div class="feedback feedback-level-complete">
+      <span class="feedback-emoji">🏆</span>
+      <span>Nivå ${levelNum} fullført!</span>
+      <span class="stars-earned">${starsStrip(stars)}</span>
+    </div>`;
+  } else if (state.feedback === 'correct') {
+    const selectedNums = [...state.selectedPieces].map(i => puzzle.pieces[i]);
     feedbackHtml = `<div class="feedback feedback-correct">
       <span class="feedback-emoji">🌟</span>
       <span>${selectedNums.join(' + ')} = ${puzzle.target}</span>
-      <span class="stars-earned">${starsStrip(stars)}</span>
     </div>`;
   } else if (state.feedback === 'wrong') {
     feedbackHtml = `<div class="feedback feedback-wrong">
@@ -241,8 +251,10 @@ function renderPlay() {
     feedbackHtml = `<div class="feedback feedback-empty"></div>`;
   }
 
-  const actionHtml = state.feedback === 'correct'
-    ? `<button class="action-btn btn-next" data-action="next">Neste nivå →</button>`
+  const actionHtml = state.feedback === 'levelComplete'
+    ? `<button class="action-btn btn-next" data-action="next-level">Neste nivå →</button>`
+    : state.feedback === 'correct'
+    ? `<button class="action-btn btn-next" data-action="next-puzzle">Neste →</button>`
     : `<button class="action-btn btn-hint"  data-action="hint">💡 Tips</button>
        <button class="action-btn btn-undo"  data-action="undo">↩ Angre</button>
        <button class="action-btn btn-check" data-action="check">✓ Sjekk</button>`;
@@ -256,6 +268,7 @@ function renderPlay() {
             <span class="level-name">Nivå ${levelNum}</span>
             ${starsHtml}
           </div>
+          <span class="puzzle-counter">${puzzleNum} / ${PUZZLES_PER_LEVEL}</span>
         </div>
         ${dotsHtml}
       </header>
@@ -278,15 +291,16 @@ function renderLevelSelect() {
       <header class="sub-header">
         <button class="back-btn" data-action="home">←</button>
         <h2>Velg nivå</h2>
+        <span class="puzzle-counter" style="margin-left:auto">${Object.keys(state.levelStars).length} / ${LEVEL_COUNT}</span>
       </header>
       <div class="level-grid">
-        ${LEVELS.map((lvl, i) => {
+        ${Array.from({ length: LEVEL_COUNT }, (_, i) => {
           const s      = state.levelStars[i] ?? 0;
-          const locked = i > state.currentLevelIndex + 1 && !state.levelStars[i];
+          const locked = i > state.currentLevelIndex && !state.levelStars[i];
           return `<button class="level-card${locked ? ' locked' : ''}${i === state.currentLevelIndex ? ' current' : ''}"
                     data-action="goto-level" data-level="${i}" ${locked ? 'disabled' : ''}>
             <div class="level-card-num">${i + 1}</div>
-            <div class="level-card-stars">${[1,2,3].map(n => s >= n ? '⭐' : '·').join('')}</div>
+            <div class="level-card-stars">${s > 0 ? [1,2,3].map(n => s >= n ? '⭐' : '·').join('') : ''}</div>
           </button>`;
         }).join('')}
       </div>
@@ -447,7 +461,7 @@ function renderParent() {
 
         <section class="parent-section">
           <h3>Rapport</h3>
-          <div class="report-row"><span>Fullførte nivåer</span><strong>${Object.keys(state.levelStars).length} / ${LEVELS.length}</strong></div>
+          <div class="report-row"><span>Fullførte nivåer</span><strong>${Object.keys(state.levelStars).length} / ${LEVEL_COUNT}</strong></div>
           <div class="report-row"><span>Stjerner totalt</span><strong>${state.totalStars}</strong></div>
           <div class="report-row"><span>Nåværende nivå</span><strong>${state.currentLevelIndex + 1}</strong></div>
         </section>
@@ -511,6 +525,13 @@ function applyPieceSelection() {
     path.classList.toggle('sel', sel);
     label.setAttribute('fill', sel ? c.textSelected : c.textIdle);
   }
+  // Sync feedback/hint display — clears 'wrong' feedback and hint text when user re-selects.
+  if (state.feedback === null) {
+    const feedbackEl = app.querySelector('.feedback');
+    if (feedbackEl) { feedbackEl.className = 'feedback feedback-empty'; feedbackEl.innerHTML = ''; }
+    const centerEl = app.querySelector('.wheel-svg circle');
+    if (centerEl) centerEl.setAttribute('fill', '#7C3AED');
+  }
 }
 
 // ── Event wiring ──────────────────────────────────────────────────────────────
@@ -556,7 +577,7 @@ function handleAction(action, el) {
       break;
 
     case 'daily':
-      setState(goToLevel(state, state.dailyIndex));
+      setState(goToLevel(state, state.dailyLevelIndex));
       break;
 
     case 'nav-rewards':
@@ -586,7 +607,7 @@ function handleAction(action, el) {
 
     case 'check': {
       const result = submitAnswer(state);
-      if (result.feedback === 'correct') {
+      if (result.feedback === 'correct' || result.feedback === 'levelComplete') {
         playSound('correct');
         pendingCelebrate = true;
       } else if (result.feedback === 'wrong') {
@@ -596,7 +617,11 @@ function handleAction(action, el) {
       break;
     }
 
-    case 'next':
+    case 'next-puzzle':
+      setState(nextPuzzle(state));
+      break;
+
+    case 'next-level':
       setState(nextLevel(state));
       break;
 
