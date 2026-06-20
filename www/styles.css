@@ -665,6 +665,7 @@ body {
 .reward-card {
   background: var(--c-surface);
   border-radius: var(--r-lg);
+  border: none;
   padding: 14px 6px;
   display: flex;
   flex-direction: column;
@@ -672,14 +673,66 @@ body {
   gap: 4px;
   box-shadow: var(--shadow-sm);
   transition: transform 0.12s;
+  width: 100%;
+  min-height: 92px;
+  color: inherit;
+  font-family: inherit;
+  text-align: center;
 }
 
-.reward-card.unlocked:hover { transform: scale(1.04); }
-.reward-card.locked         { opacity: 0.5; }
+.reward-card.unlocked { cursor: pointer; }
+.reward-card.unlocked:hover { transform: scale(1.06); }
+.reward-card.unlocked:active { transform: scale(0.95); }
+.reward-card.locked         { opacity: 0.5; cursor: default; }
 
 .reward-emoji { font-size: 2rem; }
 .reward-name  { font-size: 0.72rem; font-weight: 800; color: var(--c-text); }
 .reward-req   { font-size: 0.62rem; color: var(--c-muted); }
+
+/* ============================================================
+   Reward Detail Screen
+   ============================================================ */
+.screen-reward-detail {
+  background: linear-gradient(160deg, #EDE9FE 0%, #FFF8F0 62%);
+  padding-bottom: var(--nav-h);
+}
+
+.reward-detail-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 28px 24px 42px;
+  text-align: center;
+}
+
+.reward-detail-icon {
+  width: min(190px, 58vw);
+  aspect-ratio: 1;
+  border-radius: var(--r-xl);
+  background: var(--c-surface);
+  box-shadow: var(--shadow-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 7rem;
+  line-height: 1;
+}
+
+.reward-detail-fact {
+  max-width: 340px;
+  margin: 0;
+  padding: 16px 18px;
+  border-radius: var(--r-lg);
+  background: var(--c-surface);
+  box-shadow: var(--shadow-sm);
+  color: var(--c-text);
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.6;
+}
 
 /* ============================================================
    Parent Screen

@@ -141,10 +141,18 @@ function starsStrip(count) {
   ).join('');
 }
 
+function isRewardUnlocked(reward, gameState = state) {
+  return reward.unlockLevel === 0 || !!gameState.levelStars[reward.unlockLevel - 1];
+}
+
+function getSelectedReward() {
+  return REWARD_GROUPS[state.rewardGroupIndex]?.items[state.rewardItemIndex] ?? null;
+}
+
 // ── Screen renderers ──────────────────────────────────────────────────────────
 
 function renderBottomNav() {
-  const s = state.screen;
+  const s = state.screen === 'reward-detail' ? 'rewards' : state.screen;
   const btns = [
     { action: 'nav-home',     icon: '🏠', label: 'Hjem',        screen: 'home'     },
     { action: 'nav-play',     icon: '▶️',  label: 'Spill',       screen: 'play'     },
@@ -386,13 +394,16 @@ function renderRewards() {
     .filter(r => r.unlockLevel > 0 && !state.levelStars[r.unlockLevel - 1])
     .sort((a, b) => a.unlockLevel - b.unlockLevel)[0];
 
-  const rewardCard = (r) => {
-    const unlocked = r.unlockLevel === 0 || !!state.levelStars[r.unlockLevel - 1];
-    return `<div class="reward-card${unlocked ? ' unlocked' : ' locked'}">
+  const rewardCard = (r, groupIndex, itemIndex) => {
+    const unlocked = isRewardUnlocked(r);
+    return `<button type="button" class="reward-card${unlocked ? ' unlocked' : ' locked'}"
+      ${unlocked
+        ? `data-action="open-reward" data-reward-group="${groupIndex}" data-reward-index="${itemIndex}" aria-label="Åpne ${r.name}"`
+        : `disabled aria-label="${r.name} låses opp på nivå ${r.unlockLevel}"`}>
       <div class="reward-emoji">${unlocked ? r.emoji : '\uD83D\uDD12'}</div>
       <div class="reward-name">${r.name}</div>
       ${!unlocked ? `<div class="reward-req">Niv\u00e5 ${r.unlockLevel}</div>` : ''}
-    </div>`;
+    </button>`;
   };
 
   return `
@@ -409,11 +420,30 @@ function renderRewards() {
         <span class="next-reward-level">— fullfør nivå ${nextReward.unlockLevel}</span>
       </div>` : `<div class="next-reward-banner next-reward-done">🏆 Alle belønninger funnet!</div>`}
 
-      ${REWARD_GROUPS.map(group => `
+      ${REWARD_GROUPS.map((group, groupIndex) => `
       <section class="rewards-section">
         <div class="section-title">${group.title}</div>
-        <div class="rewards-grid">${group.items.map(rewardCard).join('')}</div>
+        <div class="rewards-grid">${group.items.map((r, itemIndex) => rewardCard(r, groupIndex, itemIndex)).join('')}</div>
       </section>`).join('')}
+    </div>
+    ${renderBottomNav()}`;
+}
+
+function renderRewardDetail() {
+  const reward = getSelectedReward();
+  if (!reward || !isRewardUnlocked(reward)) return renderRewards();
+
+  return `
+    <div class="screen screen-reward-detail">
+      <header class="sub-header">
+        <button class="back-btn" data-action="nav-rewards">←</button>
+        <h2>${reward.name}</h2>
+      </header>
+
+      <main class="reward-detail-main">
+        <div class="reward-detail-icon" aria-hidden="true">${reward.emoji}</div>
+        <p class="reward-detail-fact">${reward.funFact}</p>
+      </main>
     </div>
     ${renderBottomNav()}`;
 }
@@ -481,6 +511,7 @@ function renderScreen() {
     case 'levels':   return renderLevelSelect();
     case 'progress': return renderProgress();
     case 'rewards':  return renderRewards();
+    case 'reward-detail': return renderRewardDetail();
     case 'parent':   return renderParent();
     default:         return renderHome();
   }
@@ -578,6 +609,23 @@ function handleAction(action, el) {
     case 'nav-rewards':
       setState(goToScreen(state, 'rewards'));
       break;
+
+    case 'open-reward': {
+      const groupIndex = Number(el.dataset.rewardGroup);
+      const itemIndex = Number(el.dataset.rewardIndex);
+      const reward = REWARD_GROUPS[groupIndex]?.items[itemIndex];
+      if (!reward || !isRewardUnlocked(reward)) break;
+
+      setState({
+        ...state,
+        screen: 'reward-detail',
+        rewardGroupIndex: groupIndex,
+        rewardItemIndex: itemIndex,
+        feedback: null,
+        hintText: null,
+      });
+      break;
+    }
 
     case 'nav-progress':
       setState(goToScreen(state, 'progress'));
