@@ -2,7 +2,7 @@
 import {
   createGame, getCurrentPuzzle, selectPiece, undoLast,
   submitAnswer, requestHint, nextPuzzle, nextLevel, goToLevel, goToScreen,
-  goToDailyChallenge, updateSetting, unlockParent, resetProgress, getSkillProgress,
+  updateSetting, unlockParent, resetProgress, getSkillProgress,
   getActiveLevelIndex, getActivePuzzleIndex, isLevelUnlocked,
   LEVEL_COUNT, PUZZLES_PER_LEVEL, PIECE_COLORS, REWARD_GROUPS,
 } from './engine/game.js';
@@ -200,10 +200,6 @@ function renderHome() {
         <button class="menu-btn btn-levels" data-action="levels">
           <span class="btn-icon">📚</span>
           <div class="btn-label">Velg nivå</div>
-        </button>
-        <button class="menu-btn btn-daily" data-action="daily">
-          <span class="btn-icon">🎁</span>
-          <div class="btn-label">Dagsutfordring</div>
         </button>
         <button class="menu-btn btn-parent" data-action="parent">
           <span class="btn-icon">👨‍👩‍👧</span>
@@ -609,10 +605,6 @@ function handleAction(action, el) {
 
     case 'levels':
       setState(goToScreen(state, 'levels'));
-      break;
-
-    case 'daily':
-      setState(goToDailyChallenge(state));
       break;
 
     case 'nav-rewards':

@@ -229,11 +229,6 @@ export const REWARD_GROUPS = [
 // Each puzzle is verified to have at least one valid sum combination.
 export const LEVELS_LEGACY = []; // kept for test compatibility
 
-function getDailyLevelIndex() {
-  const epoch = new Date('2024-01-01').getTime();
-  return Math.floor((Date.now() - epoch) / 86400000) % LEVEL_COUNT;
-}
-
 function clampLevelIndex(index) {
   return Number.isInteger(index) ? Math.max(0, Math.min(index, LEVEL_COUNT - 1)) : 0;
 }
@@ -253,17 +248,11 @@ export function isLevelUnlocked(state, index) {
 }
 
 export function getActiveLevelIndex(state) {
-  return clampLevelIndex(state.playLevelIndex ?? state.currentLevelIndex);
+  return clampLevelIndex(state.currentLevelIndex);
 }
 
 export function getActivePuzzleIndex(state) {
-  return clampPuzzleIndex(state.playPuzzleIndex ?? state.currentPuzzleIndex);
-}
-
-export function getDailyChallengeLevelIndex(state) {
-  const unlockedMax = getUnlockedLevelIndex(state.levelStars);
-  const rawDailyIndex = clampLevelIndex(state.dailyLevelIndex ?? getDailyLevelIndex());
-  return rawDailyIndex % (unlockedMax + 1);
+  return clampPuzzleIndex(state.currentPuzzleIndex);
 }
 
 function loadSaved() {
@@ -296,9 +285,6 @@ export function createGame() {
     screen:             'home',
     currentLevelIndex,
     currentPuzzleIndex,
-    playLevelIndex:     currentLevelIndex,
-    playPuzzleIndex:    currentPuzzleIndex,
-    isDailyChallenge:   false,
     selectedPieces:     new Set(),
     feedback:           null,   // null | 'correct' | 'levelComplete' | 'wrong'
     hintText:           null,
@@ -310,7 +296,6 @@ export function createGame() {
     totalStars:         saved.totalStars  ?? 0,
     settings:           saved.settings   ?? { sound: true },
     parentUnlocked:     false,
-    dailyLevelIndex:    getDailyLevelIndex(),
   };
 }
 
@@ -379,8 +364,7 @@ export function nextPuzzle(state) {
   const next = {
     ...state,
     screen:             'play',
-    currentPuzzleIndex: state.isDailyChallenge ? state.currentPuzzleIndex : nextPuzzleIndex,
-    playPuzzleIndex:    nextPuzzleIndex,
+    currentPuzzleIndex: nextPuzzleIndex,
     selectedPieces:     new Set(),
     feedback:           null,
     hintText:           null,
@@ -397,29 +381,11 @@ export function nextPuzzle(state) {
 export function nextLevel(state) {
   const activeLevelIndex = getActiveLevelIndex(state);
   const nextLevelIndex = Math.min(activeLevelIndex + 1, LEVEL_COUNT - 1);
-  if (state.isDailyChallenge) {
-    const dailyNextLevelIndex = Math.min(nextLevelIndex, getUnlockedLevelIndex(state.levelStars));
-    return {
-      ...state,
-      screen:             'play',
-      playLevelIndex:     dailyNextLevelIndex,
-      playPuzzleIndex:    0,
-      selectedPieces:     new Set(),
-      feedback:           null,
-      hintText:           null,
-      wrongAttempts:      0,
-      hintUsed:           false,
-      levelWrongTotal:    0,
-      levelHintTotal:     0,
-    };
-  }
   const next = {
     ...state,
     screen:             'play',
     currentLevelIndex:  nextLevelIndex,
     currentPuzzleIndex: 0,
-    playLevelIndex:     nextLevelIndex,
-    playPuzzleIndex:    0,
     selectedPieces:     new Set(),
     feedback:           null,
     hintText:           null,
@@ -440,9 +406,6 @@ export function goToLevel(state, index) {
     screen:             'play',
     currentLevelIndex:  targetIndex,
     currentPuzzleIndex: 0,
-    playLevelIndex:     targetIndex,
-    playPuzzleIndex:    0,
-    isDailyChallenge:   false,
     selectedPieces:     new Set(),
     feedback:           null,
     hintText:           null,
@@ -459,28 +422,8 @@ export function goToScreen(state, screen) {
   return {
     ...state,
     screen,
-    playLevelIndex:   state.currentLevelIndex,
-    playPuzzleIndex:  state.currentPuzzleIndex,
-    isDailyChallenge: false,
     feedback:         null,
     hintText:         null,
-  };
-}
-
-export function goToDailyChallenge(state) {
-  return {
-    ...state,
-    screen:             'play',
-    playLevelIndex:     getDailyChallengeLevelIndex(state),
-    playPuzzleIndex:    0,
-    isDailyChallenge:   true,
-    selectedPieces:     new Set(),
-    feedback:           null,
-    hintText:           null,
-    wrongAttempts:      0,
-    hintUsed:           false,
-    levelWrongTotal:    0,
-    levelHintTotal:     0,
   };
 }
 
