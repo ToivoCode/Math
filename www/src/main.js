@@ -10,6 +10,12 @@ import {
 let state = createGame();
 const app = document.getElementById('app');
 
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register(new URL('../sw.js', import.meta.url)).catch(() => {});
+  });
+}
+
 // ── Sound ─────────────────────────────────────────────────────────────────────
 
 function playSound(type) {
