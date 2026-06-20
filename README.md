@@ -1,4 +1,4 @@
-# Matte
+# Mattelek
 
 A browser-based math game built in plain JavaScript, HTML, and CSS.
 
