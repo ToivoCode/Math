@@ -2,13 +2,30 @@
 import {
   createGame, getCurrentPuzzle, selectPiece, undoLast,
   submitAnswer, requestHint, nextPuzzle, nextLevel, goToLevel, goToScreen,
-  updateSetting, unlockParent, resetProgress, getSkillProgress,
-  getActiveLevelIndex, getActivePuzzleIndex, isLevelUnlocked,
+  unlockProgressToLevel, updateSetting, unlockParent, resetProgress, getSkillProgress,
+  getActiveLevelIndex, getActivePuzzleIndex, getUnlockedLevelIndex, isLevelUnlocked,
   LEVEL_COUNT, PUZZLES_PER_LEVEL, PIECE_COLORS, REWARD_GROUPS,
 } from './engine/game.js';
 
 let state = createGame();
 const app = document.getElementById('app');
+
+function installMobileZoomGuard() {
+  if (!window.matchMedia?.('(pointer: coarse)').matches) return;
+
+  const preventZoomGesture = event => {
+    if (event.touches?.length > 1 || event.type.startsWith('gesture')) {
+      event.preventDefault();
+    }
+  };
+
+  document.addEventListener('touchmove', preventZoomGesture, { passive: false });
+  document.addEventListener('gesturestart', preventZoomGesture, { passive: false });
+  document.addEventListener('gesturechange', preventZoomGesture, { passive: false });
+  document.addEventListener('gestureend', preventZoomGesture, { passive: false });
+}
+
+installMobileZoomGuard();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
@@ -154,6 +171,16 @@ function isRewardUnlocked(reward, gameState = state) {
 
 function getSelectedReward() {
   return REWARD_GROUPS[state.rewardGroupIndex]?.items[state.rewardItemIndex] ?? null;
+}
+
+function getRewardEntries() {
+  return REWARD_GROUPS.flatMap((group, groupIndex) =>
+    group.items.map((reward, itemIndex) => ({ group, groupIndex, itemIndex, reward }))
+  ).sort((a, b) =>
+    a.reward.unlockLevel - b.reward.unlockLevel
+    || a.groupIndex - b.groupIndex
+    || a.itemIndex - b.itemIndex
+  );
 }
 
 // ── Screen renderers ──────────────────────────────────────────────────────────
@@ -323,13 +350,10 @@ function renderLevelSelect() {
 
 function renderProgress() {
   const skill         = getSkillProgress(state);
-  const totalCompleted = Object.keys(state.levelStars).length;
+  const unlockedLevel = getUnlockedLevelIndex(state.levelStars) + 1;
 
   const skillRows = [
     { key: 'addition',  label: 'Addisjon',    emoji: '➕', color: '#7C3AED' },
-    { key: 'bonds',     label: 'Tallpar',      emoji: '🔢', color: '#0284C7' },
-    { key: 'connected', label: 'Mønster',      emoji: '🧩', color: '#16A34A' },
-    { key: 'challenge', label: 'Utfordring',   emoji: '⚡', color: '#EA580C' },
   ].map(r => `
     <div class="skill-row">
       <span class="skill-emoji">${r.emoji}</span>
@@ -341,13 +365,6 @@ function renderProgress() {
       </div>
       <span class="skill-pct">${skill[r.key]}%</span>
     </div>`).join('');
-
-  const badgeRows = [];
-  if (totalCompleted >= 1) badgeRows.push({ icon: '🏆', label: 'Fullfører' });
-  if (state.totalStars >= 5) badgeRows.push({ icon: '⚡', label: 'Rask tenker' });
-  if (totalCompleted >= 3) badgeRows.push({ icon: '🧩', label: 'Løser' });
-  if (state.totalStars >= 10) badgeRows.push({ icon: '🌟', label: 'Superstjerne' });
-  if (state.totalStars >= 20) badgeRows.push({ icon: '👑', label: 'Mester' });
 
   return `
     <div class="screen screen-progress">
@@ -363,7 +380,7 @@ function renderProgress() {
         </div>
         <div class="level-badge">
           <div class="lbadge-label">Nivå</div>
-          <div class="lbadge-num">${state.currentLevelIndex + 1}</div>
+          <div class="lbadge-num">${unlockedLevel}</div>
         </div>
       </div>
 
@@ -372,32 +389,28 @@ function renderProgress() {
         ${skillRows}
       </div>
 
-      <div class="recent-section">
-        <div class="section-title">Merker</div>
-        ${badgeRows.length
-          ? `<div class="badge-row">${badgeRows.map(b => `
-              <div class="badge-item">
-                <span class="badge-icon">${b.icon}</span>
-                <span class="badge-label">${b.label}</span>
-              </div>`).join('')}</div>`
-          : `<p class="no-badges">Fullfør nivåer for å tjene merker!</p>`}
-      </div>
-
       <div class="bear-mascot">🐻 Kjempebra! Du gjør det bra!</div>
     </div>
     ${renderBottomNav()}`;
 }
 
 function renderRewards() {
+  const activeFilter = state.rewardFilter ?? 'all';
+  const filters = [
+    { key: 'all', label: 'Alle' },
+    ...REWARD_GROUPS.map((group, groupIndex) => ({ key: String(groupIndex), label: group.title })),
+  ];
   const totalRewards = REWARD_GROUPS.reduce((s, g) => s + g.items.length, 0);
   const unlockedCount = REWARD_GROUPS.reduce((s, g) =>
     s + g.items.filter(r => r.unlockLevel === 0 || !!state.levelStars[r.unlockLevel - 1]).length, 0);
 
   // Next reward to unlock (motivational hint)
-  const allItems = REWARD_GROUPS.flatMap(g => g.items);
-  const nextReward = allItems
-    .filter(r => r.unlockLevel > 0 && !state.levelStars[r.unlockLevel - 1])
-    .sort((a, b) => a.unlockLevel - b.unlockLevel)[0];
+  const rewardEntries = getRewardEntries();
+  const nextReward = rewardEntries
+    .map(entry => entry.reward)
+    .find(r => r.unlockLevel > 0 && !state.levelStars[r.unlockLevel - 1]);
+  const visibleRewardEntries = rewardEntries
+    .filter(entry => activeFilter === 'all' || activeFilter === String(entry.groupIndex));
 
   const rewardCard = (r, groupIndex, itemIndex) => {
     const unlocked = isRewardUnlocked(r);
@@ -425,11 +438,19 @@ function renderRewards() {
         <span class="next-reward-level">— fullfør nivå ${nextReward.unlockLevel}</span>
       </div>` : `<div class="next-reward-banner next-reward-done">🏆 Alle belønninger funnet!</div>`}
 
-      ${REWARD_GROUPS.map((group, groupIndex) => `
+      <div class="reward-filter" role="group" aria-label="Filtrer belønninger">
+        ${filters.map(filter => `
+          <button type="button" class="reward-filter-btn${activeFilter === filter.key ? ' active' : ''}"
+            data-action="filter-rewards" data-reward-filter="${filter.key}"
+            aria-pressed="${activeFilter === filter.key}">${filter.label}</button>
+        `).join('')}
+      </div>
+
       <section class="rewards-section">
-        <div class="section-title">${group.title}</div>
-        <div class="rewards-grid">${group.items.map((r, itemIndex) => rewardCard(r, groupIndex, itemIndex)).join('')}</div>
-      </section>`).join('')}
+        <div class="rewards-grid">${visibleRewardEntries
+          .map(entry => rewardCard(entry.reward, entry.groupIndex, entry.itemIndex))
+          .join('')}</div>
+      </section>
     </div>
     ${renderBottomNav()}`;
 }
@@ -454,6 +475,10 @@ function renderRewardDetail() {
 }
 
 function renderParent() {
+  const unlockLevelOptions = Array.from({ length: LEVEL_COUNT }, (_, i) => `
+    <option value="${i + 1}" ${i === state.currentLevelIndex ? 'selected' : ''}>${i + 1}</option>
+  `).join('');
+
   if (!state.parentUnlocked) {
     return `
       <div class="screen screen-parent">
@@ -465,7 +490,7 @@ function renderParent() {
           <span class="gate-emoji">🔐</span>
           <p class="gate-text">Er du en voksen? Løs regnestykket under for å åpne dette området.</p>
           <div class="gate-puzzle">
-            <span class="gate-question">Hva er <strong>9 × 6</strong>?</span>
+            <span class="gate-question">Hva er <strong>12 × 8</strong>?</span>
             <input type="number" id="parent-code" class="gate-input" placeholder="Skriv svar her" min="0" max="999" />
             <button class="gate-btn" data-action="unlock-parent">Åpne →</button>
           </div>
@@ -487,6 +512,16 @@ function renderParent() {
             <span>Lyd</span>
             <input type="checkbox" class="setting-toggle" data-setting="sound" ${state.settings.sound ? 'checked' : ''} />
           </label>
+        </section>
+
+        <section class="parent-section">
+          <h3>Lås opp nivå</h3>
+          <div class="unlock-level-row">
+            <select id="unlock-level-select" class="unlock-level-select" aria-label="Velg nivå">
+              ${unlockLevelOptions}
+            </select>
+            <button class="unlock-level-btn" data-action="unlock-progress-level">Lås opp</button>
+          </div>
         </section>
 
         <section class="parent-section">
@@ -611,6 +646,15 @@ function handleAction(action, el) {
       setState(goToScreen(state, 'rewards'));
       break;
 
+    case 'filter-rewards':
+      setState({
+        ...state,
+        rewardFilter: el.dataset.rewardFilter ?? 'all',
+        feedback: null,
+        hintText: null,
+      });
+      break;
+
     case 'open-reward': {
       const groupIndex = Number(el.dataset.rewardGroup);
       const itemIndex = Number(el.dataset.rewardIndex);
@@ -671,12 +715,18 @@ function handleAction(action, el) {
 
     case 'unlock-parent': {
       const input = document.getElementById('parent-code');
-      if (input && Number(input.value) === 54) {
+      if (input && Number(input.value) === 96) {
         setState(unlockParent(state));
       } else {
         input?.classList.add('shake');
         setTimeout(() => input?.classList.remove('shake'), 400);
       }
+      break;
+    }
+
+    case 'unlock-progress-level': {
+      const select = document.getElementById('unlock-level-select');
+      setState(unlockProgressToLevel(state, Number(select?.value)));
       break;
     }
 

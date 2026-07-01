@@ -43,35 +43,34 @@
 html {
   height: 100%;
   font-family: var(--font);
-  background: #D1D5DB; /* visible behind the card on desktop */
+  background: var(--c-bg);
+  touch-action: pan-x pan-y;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
   height: 100%;
-  background: #D1D5DB;
+  background: var(--c-bg);
   display: flex;
   align-items: flex-start;
   justify-content: center;
+  overscroll-behavior: none;
+  touch-action: pan-x pan-y;
 }
 
 /* ============================================================
-   App Shell — mobile card, centered on desktop
+   App Shell
    ============================================================ */
 #app {
   position: relative;
   width: 100%;
-  max-width: 430px;
+  max-width: none;
   height: 100dvh;
   background: var(--c-bg);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  box-shadow: var(--shadow-lg);
-}
-
-@media (min-width: 500px) {
-  body { align-items: center; }
-  #app { height: min(900px, 100dvh); border-radius: var(--r-xl); }
+  box-shadow: none;
 }
 
 /* ============================================================
@@ -217,7 +216,9 @@ body {
 .sub-header {
   display: flex;
   align-items: center;
+  align-self: stretch;
   gap: 10px;
+  width: 100%;
   padding: 14px 16px;
   background: var(--c-surface);
   border-bottom: 1.5px solid var(--c-border);
@@ -549,8 +550,7 @@ body {
 .lbadge-label { font-size: 0.68rem; font-weight: 700; opacity: 0.9; }
 .lbadge-num   { font-size: 2rem; font-weight: 900; line-height: 1.1; }
 
-.skill-section,
-.recent-section {
+.skill-section {
   margin: 0 14px;
   background: var(--c-surface);
   border-radius: var(--r-lg);
@@ -594,18 +594,6 @@ body {
 }
 
 .skill-pct { font-size: 0.77rem; font-weight: 700; color: var(--c-muted); flex-shrink: 0; }
-
-.badge-row {
-  display: flex;
-  gap: 14px;
-  flex-wrap: wrap;
-  padding-top: 4px;
-}
-
-.badge-item { display: flex; flex-direction: column; align-items: center; gap: 4px; }
-.badge-icon  { font-size: 2rem; }
-.badge-label { font-size: 0.62rem; font-weight: 700; color: var(--c-muted); text-align: center; max-width: 54px; }
-.no-badges   { font-size: 0.82rem; color: var(--c-muted); }
 
 .bear-mascot {
   text-align: center;
@@ -654,6 +642,33 @@ body {
 .next-reward-emoji { font-size: 1.3rem; }
 .next-reward-name  { color: var(--c-text); }
 .next-reward-level { color: var(--c-muted); font-size: 0.78rem; }
+
+.reward-filter {
+  margin: 12px 14px 4px;
+  padding: 4px;
+  border-radius: var(--r-lg);
+  background: #E5E7EB;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+
+.reward-filter-btn {
+  min-height: 36px;
+  border: none;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--c-muted);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.reward-filter-btn.active {
+  background: var(--c-surface);
+  color: var(--c-primary);
+  box-shadow: var(--shadow-sm);
+}
 
 .rewards-section { padding: 0 14px 4px; }
 .rewards-section .section-title { padding: 14px 0 10px; }
@@ -859,6 +874,45 @@ body {
 
 .setting-toggle:checked::after { left: 21px; }
 
+.unlock-level-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.unlock-level-select {
+  min-width: 0;
+  width: 100%;
+  padding: 11px 12px;
+  border: 2px solid var(--c-border);
+  border-radius: var(--r-md);
+  background: white;
+  color: var(--c-text);
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+
+.unlock-level-select:focus {
+  border-color: var(--c-primary);
+  outline: none;
+}
+
+.unlock-level-btn {
+  padding: 12px 14px;
+  border: none;
+  border-radius: var(--r-md);
+  background: var(--c-primary);
+  color: white;
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.unlock-level-btn:active { transform: scale(0.97); }
+
 .report-row {
   display: flex;
   justify-content: space-between;
@@ -888,6 +942,287 @@ body {
 }
 
 .reset-btn:hover { background: #FECACA; }
+
+/* ============================================================
+   Desktop Responsive Layout
+   ============================================================ */
+@media (min-width: 768px) {
+  body {
+    align-items: stretch;
+    justify-content: stretch;
+  }
+
+  #app {
+    width: 100%;
+    max-width: none;
+    height: 100dvh;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .bottom-nav {
+    justify-content: center;
+    padding-left: 32px;
+    padding-right: 32px;
+  }
+
+  .nav-btn {
+    flex: 0 1 180px;
+    border-radius: var(--r-md);
+  }
+
+  .nav-btn:hover {
+    background: var(--c-primary-soft);
+  }
+
+  .nav-icon { font-size: 1.55rem; }
+  .nav-label { font-size: 0.68rem; }
+
+  .sub-header {
+    padding: 16px max(24px, calc((100vw - 1120px) / 2 + 40px));
+  }
+
+  .sub-header h2 {
+    font-size: 1.35rem;
+  }
+
+  .screen-home,
+  .screen-levels,
+  .screen-progress,
+  .screen-rewards {
+    align-items: center;
+  }
+
+  .home-hero {
+    width: min(100%, 1120px);
+    padding: 52px 40px 20px;
+  }
+
+  .app-logo-icon { font-size: 4.5rem; }
+  .app-title { font-size: 3.3rem; }
+  .app-subtitle { font-size: 1.1rem; }
+  .mascot { font-size: 6.5rem; }
+
+  .home-menu {
+    width: min(100%, 1120px);
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+    padding: 16px 40px 40px;
+  }
+
+  .menu-btn {
+    min-height: 126px;
+    align-items: flex-start;
+    flex-direction: column;
+    justify-content: center;
+    padding: 22px;
+  }
+
+  .btn-icon { font-size: 2rem; }
+  .btn-label { font-size: 1.25rem; }
+  .btn-sub { font-size: 0.88rem; }
+
+  .play-header {
+    padding: 14px max(24px, calc((100vw - 1200px) / 2 + 40px)) 12px;
+    gap: 10px;
+  }
+
+  .play-header-top {
+    gap: 14px;
+  }
+
+  .level-name {
+    font-size: 1.15rem;
+  }
+
+  .star-display .star {
+    font-size: 1.05rem;
+  }
+
+  .puzzle-counter {
+    font-size: 0.92rem;
+  }
+
+  .progress-dots {
+    gap: 6px;
+  }
+
+  .pdot {
+    width: 10px;
+    height: 10px;
+  }
+
+  .play-main {
+    width: min(100%, 1200px);
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: minmax(220px, 1fr) minmax(360px, 540px) minmax(220px, 1fr);
+    align-items: center;
+    justify-items: center;
+    gap: 28px;
+    padding: 24px 40px;
+  }
+
+  .instruction {
+    width: min(100%, 320px);
+    justify-self: end;
+    padding: 18px 20px;
+    border-radius: var(--r-lg);
+    font-size: 1.2rem;
+    text-align: left;
+  }
+
+  .wheel-svg {
+    width: min(46vmin, 520px);
+    height: min(46vmin, 520px);
+    max-width: 100%;
+  }
+
+  .feedback {
+    width: min(100%, 330px);
+    min-height: 104px;
+    justify-self: start;
+    border-radius: var(--r-lg);
+    font-size: 1rem;
+    padding: 18px 20px;
+  }
+
+  .feedback-empty {
+    visibility: hidden;
+  }
+
+  .action-bar {
+    justify-content: center;
+    gap: 16px;
+    padding: 14px 40px;
+  }
+
+  .action-btn {
+    flex: 0 1 240px;
+    max-width: 260px;
+    padding: 15px 16px;
+    font-size: 1rem;
+  }
+
+  .level-grid {
+    width: min(100%, 1040px);
+    grid-template-columns: repeat(auto-fit, minmax(78px, 1fr));
+    gap: 14px;
+    padding: 24px 40px 40px;
+  }
+
+  .level-card {
+    width: 100%;
+    max-width: 112px;
+    justify-self: center;
+  }
+
+  .level-card-num { font-size: 1.15rem; }
+  .level-card-stars { font-size: 0.68rem; }
+
+  .screen-progress {
+    gap: 18px;
+  }
+
+  .progress-hero {
+    width: min(100%, 960px);
+    padding: 24px 40px 0;
+  }
+
+  .skill-section {
+    width: min(calc(100% - 80px), 880px);
+    margin: 0;
+    padding: 0 20px 18px;
+  }
+
+  .total-stars-badge,
+  .level-badge {
+    min-height: 118px;
+  }
+
+  .tsbadge-icon { font-size: 2.4rem; }
+  .tsbadge-num,
+  .lbadge-num { font-size: 2.5rem; }
+  .skill-label { font-size: 0.95rem; }
+  .skill-pct { font-size: 0.9rem; }
+
+  .bear-mascot {
+    width: min(calc(100% - 80px), 880px);
+    font-size: 1rem;
+  }
+
+  .next-reward-banner,
+  .reward-filter,
+  .rewards-section {
+    width: min(calc(100% - 80px), 1120px);
+  }
+
+  .next-reward-banner {
+    margin: 16px auto 0;
+    padding: 14px 18px;
+    font-size: 0.98rem;
+  }
+
+  .rewards-section {
+    padding: 0 0 8px;
+  }
+
+  .reward-filter {
+    margin: 18px auto 8px;
+    display: inline-grid;
+    grid-template-columns: repeat(3, minmax(120px, 1fr));
+  }
+
+  .rewards-grid {
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 14px;
+  }
+
+  .reward-card {
+    min-height: 124px;
+    padding: 18px 10px;
+  }
+
+  .reward-emoji { font-size: 2.5rem; }
+  .reward-name { font-size: 0.86rem; }
+  .reward-req { font-size: 0.72rem; }
+
+  .reward-detail-main {
+    gap: 26px;
+    padding: 40px;
+  }
+
+  .reward-detail-icon {
+    width: min(260px, 34vmin);
+    font-size: 9rem;
+  }
+
+  .reward-detail-fact {
+    max-width: 560px;
+    font-size: 1.18rem;
+    padding: 22px 26px;
+  }
+
+  .parent-gate {
+    padding: 48px 40px;
+  }
+
+  .gate-puzzle {
+    max-width: 360px;
+  }
+
+  .parent-content {
+    width: min(calc(100% - 80px), 760px);
+    margin: 0 auto;
+    padding: 24px 0 40px;
+    gap: 18px;
+  }
+
+  .parent-section {
+    padding: 18px;
+  }
+}
 
 /* ============================================================
    Celebration Overlay

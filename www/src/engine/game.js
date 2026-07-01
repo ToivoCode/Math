@@ -221,6 +221,7 @@ export const REWARD_GROUPS = [
       { emoji: '💎', name: 'Diamant', unlockLevel: 55, funFact: 'Diamant er det hardeste naturlige mineralet vi kjenner.' },
       { emoji: '👑', name: 'Krone', unlockLevel: 65, funFact: 'En krone er et tegn på at noen er konge, dronning eller en annen kongelig person.' },
       { emoji: '🌟', name: 'Superstjerne', unlockLevel: 75, funFact: 'En superstjerne er noe vi kaller en person eller ting som skinner ekstra mye i mengden.' },
+      { emoji: '🎡', name: 'Pariserhjul', unlockLevel: 80, funFact: 'Det første store pariserhjulet ble bygget i Chicago i 1893 og var omtrent 80 meter høyt.' },
     ],
   },
 ];
@@ -427,6 +428,41 @@ export function goToScreen(state, screen) {
   };
 }
 
+export function unlockProgressToLevel(state, levelNumber) {
+  const targetLevelIndex = clampLevelIndex(Number(levelNumber) - 1);
+  const levelStars = { ...state.levelStars };
+
+  for (let index = 0; index < targetLevelIndex; index++) {
+    levelStars[index] = Math.max(levelStars[index] ?? 0, 1);
+  }
+
+  const unlockedLevelIndex = getUnlockedLevelIndex(levelStars);
+  const currentLevelIndex = Math.min(
+    Math.max(clampLevelIndex(state.currentLevelIndex), targetLevelIndex),
+    unlockedLevelIndex
+  );
+  const currentPuzzleIndex = currentLevelIndex === state.currentLevelIndex
+    ? clampPuzzleIndex(state.currentPuzzleIndex)
+    : 0;
+  const next = {
+    ...state,
+    screen:             'parent',
+    currentLevelIndex,
+    currentPuzzleIndex,
+    selectedPieces:     new Set(),
+    feedback:           null,
+    hintText:           null,
+    wrongAttempts:      0,
+    hintUsed:           false,
+    levelWrongTotal:    0,
+    levelHintTotal:     0,
+    levelStars,
+    totalStars:         Object.values(levelStars).reduce((sum, stars) => sum + stars, 0),
+  };
+  persist(next);
+  return next;
+}
+
 export function updateSetting(state, key, value) {
   const settings = { ...state.settings, [key]: value };
   const next = { ...state, settings };
@@ -443,12 +479,8 @@ export function resetProgress() {
 }
 
 export function getSkillProgress(state) {
-  const comp = Object.keys(state.levelStars).map(Number);
-  const pct  = (min, max) => Math.round((comp.filter(i => i >= min && i <= max).length / (max - min + 1)) * 100);
+  const unlockedLevelCount = getUnlockedLevelIndex(state.levelStars) + 1;
   return {
-    addition:  pct(0,  19),
-    bonds:     pct(20, 39),
-    connected: pct(40, 49),
-    challenge: pct(50, 79),
+    addition: Math.round((unlockedLevelCount / LEVEL_COUNT) * 100),
   };
 }
