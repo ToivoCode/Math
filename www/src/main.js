@@ -2,10 +2,15 @@
 import {
   createGame, getCurrentPuzzle, selectPiece, undoLast,
   submitAnswer, requestHint, nextPuzzle, nextLevel, goToLevel, goToScreen,
-  unlockProgressToLevel, updateSetting, unlockParent, resetProgress, getSkillProgress,
+  unlockProgressToLevel, updateSetting, updateMultiplication, unlockParent, resetProgress, getSkillProgress,
   getActiveLevelIndex, getActivePuzzleIndex, getUnlockedLevelIndex, isLevelUnlocked,
   LEVEL_COUNT, PUZZLES_PER_LEVEL, PIECE_COLORS, REWARD_GROUPS,
 } from './engine/game.js';
+import {
+  TIMES_TABLES, MULTIPLICATION_ROUND_SIZE, startMultiplicationRound,
+  getMultiplicationQuestion, submitMultiplicationAnswer,
+  requestMultiplicationHint, nextMultiplicationQuestion,
+} from './engine/multiplication.js';
 
 let state = createGame();
 const app = document.getElementById('app');
@@ -186,10 +191,12 @@ function getRewardEntries() {
 // ── Screen renderers ──────────────────────────────────────────────────────────
 
 function renderBottomNav() {
-  const s = state.screen === 'reward-detail' ? 'rewards' : state.screen;
+  const s = state.screen === 'reward-detail' ? 'rewards'
+    : state.screen === 'multiplication' ? 'tables' : state.screen;
   const btns = [
     { action: 'nav-home',     icon: '🏠', label: 'Hjem',        screen: 'home'     },
-    { action: 'nav-play',     icon: '▶️',  label: 'Spill',       screen: 'play'     },
+    { action: 'nav-play',     icon: '➕', label: 'Addisjon',    screen: 'play'     },
+    { action: 'multiplication-tables', icon: '🌻', label: 'Gange', screen: 'tables' },
     { action: 'nav-rewards',  icon: '🎁', label: 'Belønninger', screen: 'rewards'  },
     { action: 'nav-progress', icon: '📊', label: 'Fremgang',    screen: 'progress' },
   ];
@@ -220,13 +227,20 @@ function renderHome() {
         <button class="menu-btn btn-continue" data-action="continue">
           <span class="btn-icon">▶️</span>
           <div>
-            <div class="btn-label">Fortsett</div>
-            <div class="btn-sub">Nivå ${state.currentLevelIndex + 1}</div>
+            <div class="btn-label">Addisjon</div>
+            <div class="btn-sub">Fortsett på nivå ${state.currentLevelIndex + 1}</div>
+          </div>
+        </button>
+        <button class="menu-btn btn-multiplication" data-action="multiplication-tables">
+          <span class="btn-icon">🌻</span>
+          <div>
+            <div class="btn-label">Gangehagen</div>
+            <div class="btn-sub">Øv på 1-gangen til 10-gangen</div>
           </div>
         </button>
         <button class="menu-btn btn-levels" data-action="levels">
           <span class="btn-icon">📚</span>
-          <div class="btn-label">Velg nivå</div>
+          <div class="btn-label">Velg addisjonsnivå</div>
         </button>
         <button class="menu-btn btn-parent" data-action="parent">
           <span class="btn-icon">👨‍👩‍👧</span>
@@ -348,12 +362,139 @@ function renderLevelSelect() {
     ${renderBottomNav()}`;
 }
 
+// ── Gangehagen ────────────────────────────────────────────────────────────────
+
+function renderMultiplicationTables() {
+  const practice = state.multiplication;
+  const resumable = practice.round && !practice.round.complete;
+  return `
+    <div class="screen screen-tables">
+      <header class="sub-header">
+        <button class="back-btn" data-action="home" aria-label="Til hjem">←</button>
+        <h2>Gangehagen</h2>
+      </header>
+      <main class="tables-main">
+        <div class="tables-intro">
+          <span class="garden-mascot" aria-hidden="true">🌻</span>
+          <h1>Hva vil du øve på?</h1>
+          <p>Velg en gangetabell. Løs 10 gangestykker og få hagen til å blomstre!</p>
+        </div>
+        ${resumable ? `<button class="garden-resume" data-action="multiplication-resume">
+          Fortsett med ${practice.round.table}-gangen · ${practice.round.results.length} av 10 løst →
+        </button>` : ''}
+        <div class="times-table-grid" aria-label="Velg gangetabell">
+          ${TIMES_TABLES.map(table => {
+            const progress = practice.progress[table];
+            return `<button class="times-table-card${progress?.best === 10 ? ' mastered' : ''}"
+                data-action="multiplication-start" data-table="${table}">
+              <span class="table-flower" aria-hidden="true">${progress?.best === 10 ? '🌻' : progress ? '🌷' : '🌱'}</span>
+              <span class="table-title">${table}-gangen</span>
+              <span class="table-example">${table} × 3 = ${table * 3}</span>
+              <span class="table-record">${progress ? `Beste: ${progress.best} av 10 uten hjelp` : 'Klar til å så!'}</span>
+            </button>`;
+          }).join('')}
+        </div>
+        <p class="garden-note">Alle tabellene er åpne. Øv så mange ganger du vil, i ditt eget tempo.</p>
+      </main>
+    </div>
+    ${renderBottomNav()}`;
+}
+
+function renderGarden(round) {
+  return `<div class="multiplication-garden" role="img" aria-label="${round.results.length} av 10 blomster har blomstret">
+    <div class="garden-sky" aria-hidden="true"><span>☁️</span><span>☀️</span></div>
+    <div class="garden-plots" aria-hidden="true">
+      ${round.factors.map((factor, index) => `
+        <div class="garden-plot${index < round.results.length ? ' bloomed' : ''}${index === round.index && round.feedback !== 'correct' ? ' growing' : ''}">
+          <span class="garden-flower">${index < round.results.length ? ['🌻', '🌷', '🌼'][index % 3] : '🌱'}</span>
+          <span class="garden-plot-label">× ${factor}</span>
+        </div>`).join('')}
+    </div>
+    <div class="garden-ground"></div>
+  </div>`;
+}
+
+function renderMultiplicationHint(question) {
+  return `<div class="multiplication-hint" id="multiplication-hint">
+    <p><strong>${question.factor} grupper med ${question.table} prikker.</strong><br>Tell ${question.table} om gangen. Hvor mange blir det til sammen?</p>
+    <div class="dot-groups" role="img" aria-label="${question.factor} grupper med ${question.table} prikker i hver">
+      ${Array.from({ length: question.factor }, () => `<span class="dot-group" aria-hidden="true">
+        ${'<i></i>'.repeat(question.table)}
+      </span>`).join('')}
+    </div>
+  </div>`;
+}
+
+function renderMultiplication() {
+  const round = state.multiplication.round;
+  if (!round) return renderMultiplicationTables();
+  const question = getMultiplicationQuestion(state.multiplication);
+  const correct = round.feedback === 'correct';
+  const independentCount = round.results.filter(result => result.independent).length;
+  let feedback = 'Skriv svaret og se hva som spirer!';
+  if (correct && question) feedback = `Riktig! ${question.table} × ${question.factor} = ${question.answer}. En ny blomst!`;
+  else if (round.feedback === 'wrong') feedback = 'Det var ikke helt riktig. Prøv igjen, eller bruk prikkene som hjelp.';
+  else if (round.feedback === 'invalid') feedback = 'Skriv et helt tall i svarfeltet først.';
+
+  return `<div class="screen screen-multiplication">
+    <header class="sub-header multiplication-header">
+      <button class="back-btn" data-action="multiplication-tables" aria-label="Velg gangetabell">←</button>
+      <h2>${round.table}-gangen</h2>
+      <span class="garden-counter">🌼 ${round.results.length} / ${MULTIPLICATION_ROUND_SIZE}</span>
+    </header>
+    <main class="multiplication-main${round.complete ? ' round-complete' : ''}">
+      <section class="garden-panel">
+        <div class="garden-heading">
+          <span class="garden-eyebrow">GANGEHAGEN</span>
+          <h1>${round.complete ? 'Se så fint det blomstrer!' : 'Dyrk din egen gangehage'}</h1>
+          <p>${round.complete ? `Du har løst alle de 10 stykkene i ${round.table}-gangen.` : 'Hvert riktige svar får en ny blomst til å vokse.'}</p>
+        </div>
+        ${renderGarden(round)}
+      </section>
+      ${round.complete ? `<section class="multiplication-card multiplication-summary">
+        <span class="summary-bloom" aria-hidden="true">💐</span>
+        <h2 tabindex="-1" id="multiplication-result">Hele hagen blomstrer!</h2>
+        <p><strong>${independentCount} av 10</strong> på første forsøk uten hjelp.</p>
+        <p>${independentCount === 10 ? 'Du kan denne tabellen kjempegodt!' : 'Hver runde gjør deg litt tryggere. Prøv igjen når du vil!'}</p>
+        <details class="multiplication-review">
+          <summary>Se gangestykkene dine</summary>
+          <ul>${[...round.results].sort((a, b) => a.factor - b.factor).map(result => `<li>
+            <strong>${round.table} × ${result.factor} = ${round.table * result.factor}</strong>
+            <span>${result.independent ? 'På egen hånd' : 'Med litt øving'}</span>
+          </li>`).join('')}</ul>
+        </details>
+        <button class="garden-primary" data-action="multiplication-start" data-table="${round.table}">Øv på ${round.table}-gangen igjen</button>
+        <button class="garden-secondary" data-action="multiplication-tables">Velg en annen gangetabell</button>
+      </section>` : `<section class="multiplication-card">
+        <p class="garden-eyebrow">GANGESTYKKE ${round.index + 1} AV 10</p>
+        <div class="multiplication-equation" aria-label="${question.table} ganger ${question.factor}">
+          ${question.table} <span>×</span> ${question.factor} <span>=</span> <strong>${correct ? question.answer : '?'}</strong>
+        </div>
+        <p class="multiplication-feedback ${correct ? 'is-correct' : ''}" id="multiplication-feedback" role="status">${feedback}</p>
+        ${correct ? `<button class="garden-primary" data-action="multiplication-next">${round.results.length === 10 ? 'Se hagen din' : 'Neste gangestykke'} →</button>` : `
+          <form id="multiplication-form" novalidate>
+            <label for="multiplication-answer">Svaret ditt</label>
+            <div class="multiplication-answer-row">
+              <input id="multiplication-answer" name="answer" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="3" autocomplete="off" enterkeyhint="done"
+                aria-describedby="multiplication-feedback" ${['wrong', 'invalid'].includes(round.feedback) ? 'aria-invalid="true"' : ''} />
+              <button type="submit" class="garden-primary">Sjekk svar →</button>
+            </div>
+          </form>
+          <button class="garden-secondary" data-action="multiplication-hint" aria-expanded="${round.hintUsed}" aria-controls="multiplication-hint">💡 Vis meg med prikker</button>
+          ${round.hintUsed ? renderMultiplicationHint(question) : ''}
+        `}
+      </section>`}
+    </main>
+  </div>`;
+}
+
 function renderProgress() {
   const skill         = getSkillProgress(state);
   const unlockedLevel = getUnlockedLevelIndex(state.levelStars) + 1;
 
   const skillRows = [
     { key: 'addition',  label: 'Addisjon',    emoji: '➕', color: '#7C3AED' },
+    { key: 'multiplication', label: 'Gange · på egen hånd', emoji: '🌻', color: '#15803D' },
   ].map(r => `
     <div class="skill-row">
       <span class="skill-emoji">${r.emoji}</span>
@@ -529,11 +670,13 @@ function renderParent() {
           <div class="report-row"><span>Fullførte nivåer</span><strong>${Object.keys(state.levelStars).length} / ${LEVEL_COUNT}</strong></div>
           <div class="report-row"><span>Stjerner totalt</span><strong>${state.totalStars}</strong></div>
           <div class="report-row"><span>Nåværende nivå</span><strong>${state.currentLevelIndex + 1}</strong></div>
+          <div class="report-row"><span>Gangetabeller øvd på</span><strong>${Object.keys(state.multiplication.progress).length} / 10</strong></div>
+          <div class="report-row"><span>Gange på egen hånd</span><strong>${getSkillProgress(state).multiplication}%</strong></div>
         </section>
 
         <section class="parent-section">
           <h3>Om appen</h3>
-          <p class="parent-text">Mattelek er en matematikkapp for barn i alderen 5–8 år. Den øver på addisjon, tallpar og mønstergjenkjenning gjennom interaktive tallhjulpuslespill.</p>
+          <p class="parent-text">Mattelek er en matematikkapp for barn i alderen 5–8 år. Den øver på addisjon, tallpar og mønstergjenkjenning med tallhjul, og på gangetabellene fra 1 til 10 i Gangehagen.</p>
         </section>
 
         <button class="reset-btn" data-action="reset-progress">Nullstill all fremgang</button>
@@ -549,6 +692,8 @@ function renderScreen() {
     case 'home':     return renderHome();
     case 'play':     return renderPlay();
     case 'levels':   return renderLevelSelect();
+    case 'tables':   return renderMultiplicationTables();
+    case 'multiplication': return renderMultiplication();
     case 'progress': return renderProgress();
     case 'rewards':  return renderRewards();
     case 'reward-detail': return renderRewardDetail();
@@ -618,6 +763,22 @@ function attachEvents() {
     el.addEventListener('click', () => handleAction(el.dataset.action, el));
   });
 
+  const multiplicationForm = document.getElementById('multiplication-form');
+  multiplicationForm?.addEventListener('submit', event => {
+    event.preventDefault();
+    const input = document.getElementById('multiplication-answer');
+    const answer = input.value;
+    const practice = submitMultiplicationAnswer(state.multiplication, answer);
+    if (practice.round.feedback === 'correct') {
+      playSound('correct');
+      if (practice.round.results.length === 10) pendingCelebrate = true;
+    } else if (practice.round.feedback === 'wrong') {
+      playSound('wrong');
+    }
+    setState(updateMultiplication(state, practice));
+    focusMultiplication(answer);
+  });
+
   // Settings toggles
   app.querySelectorAll('[data-setting]').forEach(el => {
     el.addEventListener('change', () => {
@@ -626,8 +787,51 @@ function attachEvents() {
   });
 }
 
+function focusMultiplication(answer = '') {
+  const input = document.getElementById('multiplication-answer');
+  if (input) {
+    input.value = answer;
+    input.focus({ preventScroll: true });
+    input.select();
+  } else {
+    const next = document.getElementById('multiplication-result')
+      ?? app.querySelector('[data-action="multiplication-next"]');
+    next?.focus({ preventScroll: true });
+  }
+}
+
 function handleAction(action, el) {
   switch (action) {
+    case 'multiplication-tables':
+      setState(goToScreen(state, 'tables'));
+      break;
+
+    case 'multiplication-start':
+      setState(updateMultiplication(
+        goToScreen(state, 'multiplication'),
+        startMultiplicationRound(state.multiplication, Number(el.dataset.table), Date.now())
+      ));
+      focusMultiplication();
+      break;
+
+    case 'multiplication-resume':
+      setState(goToScreen(state, 'multiplication'));
+      focusMultiplication();
+      break;
+
+    case 'multiplication-next':
+      setState(updateMultiplication(state, nextMultiplicationQuestion(state.multiplication)));
+      focusMultiplication();
+      break;
+
+    case 'multiplication-hint': {
+      const answer = document.getElementById('multiplication-answer')?.value ?? '';
+      playSound('hint');
+      setState(updateMultiplication(state, requestMultiplicationHint(state.multiplication)));
+      focusMultiplication(answer);
+      break;
+    }
+
     case 'continue':
     case 'nav-play':
       setState(goToScreen(state, 'play'));

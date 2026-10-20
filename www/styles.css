@@ -1256,3 +1256,150 @@ body {
 }
 
 .shake { animation: shake 0.38s ease-in-out; }
+
+/* ============================================================
+   Gangehagen — times tables, written answers, and a growing garden
+   ============================================================ */
+.btn-multiplication { background: linear-gradient(135deg, #15803D, #0F766E); }
+
+.screen-tables,
+.screen-multiplication { background: linear-gradient(155deg, #F0FDF4, #FFF9ED 80%); }
+
+.tables-main { width: min(100%, 1000px); margin: 0 auto; padding: 24px 20px 32px; }
+.tables-intro { max-width: 540px; text-align: center; margin: 0 auto 24px; }
+.garden-mascot { display: block; font-size: 3.4rem; margin-bottom: 8px; }
+.tables-intro h1 { font-size: clamp(1.5rem, 4vw, 2rem); font-weight: 900; color: #14532D; }
+.tables-intro p,
+.garden-heading p { margin-top: 8px; color: #526452; line-height: 1.6; font-weight: 600; }
+.times-table-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.times-table-card {
+  border: 2px solid #D5E8D2;
+  background: #FFFFFF;
+  border-radius: 22px;
+  padding: 16px 8px;
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  gap: 4px;
+  font: inherit;
+  color: #14532D;
+  cursor: pointer;
+  box-shadow: 0 4px 0 #D5E8D2;
+  transition: transform 0.15s, border-color 0.15s;
+}
+.times-table-card:hover { transform: translateY(-3px); border-color: #15803D; }
+.times-table-card:active { transform: translateY(2px); }
+.times-table-card.mastered { background: #F0FDF4; border-color: #86B98B; }
+.table-flower { font-size: 1.9rem; }
+.table-title { font-size: 1.2rem; font-weight: 900; }
+.table-example { color: #526452; font-size: 0.9rem; font-weight: 700; }
+.table-record { margin-top: 6px; font-size: 0.7rem; font-weight: 700; color: #526452; }
+.garden-note { margin: 24px auto 0; text-align: center; color: #526452; line-height: 1.6; font-size: 0.85rem; }
+.garden-resume {
+  display: block;
+  width: 100%;
+  margin-bottom: 20px;
+  padding: 14px;
+  border: 1px solid #86B98B;
+  border-radius: 14px;
+  color: #14532D;
+  background: #DCFCE7;
+  font: 800 0.95rem var(--font);
+  cursor: pointer;
+}
+.multiplication-header h2 { color: #14532D; }
+.garden-counter { margin-left: auto; font-size: 0.9rem; font-weight: 900; white-space: nowrap; color: #14532D; }
+.multiplication-main {
+  width: min(100%, 1080px);
+  margin: auto;
+  padding: 32px 28px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 36px;
+}
+.garden-heading { text-align: center; margin-bottom: 18px; }
+.garden-eyebrow { color: #526452; font-size: 0.74rem; letter-spacing: 0.08em; font-weight: 900; }
+.garden-heading h1 { font-size: clamp(1.4rem, 3vw, 1.9rem); color: #14532D; margin-top: 8px; line-height: 1.25; }
+.multiplication-garden {
+  position: relative;
+  overflow: hidden;
+  padding: 18px 16px 0;
+  border: 2px solid #D5E8D2;
+  border-radius: 32px;
+  background: linear-gradient(#E0F2FE 0%, #F0FDF4 48%, #DCF2C3 48%);
+}
+.garden-sky { display: flex; justify-content: space-between; padding: 0 14px 4px; font-size: 2.4rem; }
+.garden-plots { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px 8px; padding: 10px 0 20px; }
+.garden-plot { display: flex; flex-direction: column; align-items: center; border-radius: 12px; padding: 4px 0; }
+.garden-plot.growing { background: #FFFFFFB3; outline: 2px dashed #759E64; }
+.garden-flower { font-size: clamp(1.65rem, 4vw, 2.6rem); line-height: 1.4; }
+.garden-plot.bloomed .garden-flower { animation: garden-bloom 0.3s ease-out; }
+.garden-plot-label { font-size: 0.75rem; font-weight: 900; color: #3F642E; }
+.garden-ground { height: 16px; margin: 0 -16px; background: #A5C785; border-top: 4px solid #80A45F; }
+.multiplication-card { min-width: 0; padding: 26px; background: #FFF; border: 1px solid #DFE9D9; border-radius: 26px; box-shadow: 0 8px 28px #3653140D; }
+.multiplication-equation { display: flex; justify-content: center; align-items: center; gap: 0.18em; margin: 16px 0; font-size: clamp(2rem, 4vw, 3.2rem); font-weight: 900; color: #14532D; white-space: nowrap; }
+.multiplication-equation span { color: #7A8D72; font-weight: 700; }
+.multiplication-equation strong { color: #15803D; }
+.multiplication-feedback { min-height: 3.2em; color: #526452; font-size: 0.95rem; line-height: 1.5; margin-bottom: 16px; }
+.multiplication-feedback.is-correct { color: #15803D; font-weight: 800; }
+#multiplication-form label { display: block; font-size: 0.85rem; font-weight: 800; color: #526452; margin-bottom: 6px; }
+.multiplication-answer-row { display: flex; gap: 10px; }
+#multiplication-answer { width: 90px; min-width: 0; padding: 9px; border: 2px solid #9ABC8C; border-radius: 14px; font: 900 1.6rem var(--font); text-align: center; color: #14532D; background: #F8FCF5; }
+#multiplication-answer[aria-invalid="true"] { border-color: #C48236; }
+.garden-primary,
+.garden-secondary { min-height: 48px; border-radius: 14px; padding: 12px 16px; font: 800 0.95rem var(--font); cursor: pointer; line-height: 1.4; }
+.garden-primary { width: 100%; border: 2px solid #15803D; background: #15803D; color: white; }
+.garden-primary:hover { background: #166534; border-color: #166534; }
+.garden-secondary { width: 100%; margin-top: 12px; border: 1px solid #D5E8D2; color: #365B2A; background: #F4F9EF; }
+.garden-secondary:hover { background: #E7F3DC; }
+.screen-tables button:focus-visible,
+.screen-multiplication button:focus-visible,
+#multiplication-answer:focus-visible,
+.multiplication-review summary:focus-visible { outline: 3px solid #0369A1; outline-offset: 3px; }
+.multiplication-hint { margin-top: 16px; border-top: 1px solid #D5E8D2; padding-top: 14px; color: #526452; font-size: 0.85rem; line-height: 1.6; }
+.dot-groups { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+.dot-group { display: inline-flex; gap: 4px; padding: 7px; border: 1px solid #A8C494; border-radius: 12px; background: #F0F7EA; }
+.dot-group i { width: 8px; height: 8px; border-radius: 50%; background: #397C42; }
+.multiplication-summary { text-align: center; }
+.summary-bloom { font-size: 3rem; }
+.multiplication-summary h2 { color: #14532D; font-size: 1.45rem; margin: 10px 0; }
+.multiplication-summary p { color: #526452; line-height: 1.6; margin-bottom: 12px; font-size: 0.95rem; }
+.multiplication-review { text-align: left; margin: 18px 0; font-size: 0.85rem; }
+.multiplication-review summary { cursor: pointer; color: #14532D; font-weight: 800; padding: 8px 0; }
+.multiplication-review ul { list-style: none; }
+.multiplication-review li { display: flex; gap: 8px; justify-content: space-between; border-top: 1px solid #E4EEDD; padding: 7px 0; }
+.multiplication-review li span { color: #526452; }
+
+@keyframes garden-bloom {
+  from { transform: scale(0.65) rotate(-8deg); }
+  to { transform: scale(1) rotate(0); }
+}
+
+@media (min-width: 768px) {
+  .home-menu { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .times-table-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 16px; }
+  .tables-main { padding-top: 32px; }
+  .times-table-card { padding: 20px 8px; }
+}
+
+@media (max-width: 767px) {
+  .multiplication-main { grid-template-columns: minmax(0, 1fr); gap: 16px; padding: 18px 16px 24px; margin: 0 auto; max-width: 500px; }
+  .garden-heading { margin-bottom: 12px; }
+  .garden-heading h1 { font-size: 1.25rem; }
+  .garden-heading p { font-size: 0.85rem; margin-top: 4px; }
+  .garden-sky { font-size: 1.5rem; padding-bottom: 0; }
+  .multiplication-garden { padding-top: 8px; border-radius: 24px; }
+  .garden-plots { gap: 5px 8px; padding: 3px 0 10px; }
+  .garden-flower { font-size: 1.75rem; line-height: 1.15; }
+  .garden-plot-label { font-size: 0.65rem; }
+  .multiplication-card { padding: 20px; border-radius: 22px; }
+  .multiplication-equation { font-size: 2.25rem; margin: 10px 0; }
+  .multiplication-feedback { font-size: 0.85rem; min-height: 0; margin-bottom: 12px; }
+  .multiplication-answer-row .garden-primary { flex: 1; padding: 10px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .garden-plot.bloomed .garden-flower { animation: none; }
+  .times-table-card { transition: none; }
+}

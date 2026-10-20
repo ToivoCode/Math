@@ -1,4 +1,5 @@
 // Game state, rules, and transitions — no DOM access.
+import { createMultiplication, getMultiplicationProgress } from './multiplication.js';
 
 export const LEVEL_COUNT       = 80;
 export const PUZZLES_PER_LEVEL = 10;
@@ -257,7 +258,7 @@ export function getActivePuzzleIndex(state) {
 }
 
 function loadSaved() {
-  try { return JSON.parse(localStorage.getItem('mattelek') ?? '{}'); }
+  try { return JSON.parse(localStorage.getItem('mattelek') ?? '{}') ?? {}; }
   catch { return {}; }
 }
 
@@ -269,6 +270,7 @@ function persist(state) {
       levelStars:         state.levelStars,
       totalStars:         state.totalStars,
       settings:           state.settings,
+      multiplicationProgress: state.multiplication.progress,
     }));
   } catch { /* storage unavailable */ }
 }
@@ -284,6 +286,7 @@ export function createGame() {
     : 0;
   return {
     screen:             'home',
+    multiplication:     createMultiplication(saved.multiplicationProgress),
     currentLevelIndex,
     currentPuzzleIndex,
     selectedPieces:     new Set(),
@@ -463,6 +466,12 @@ export function unlockProgressToLevel(state, levelNumber) {
   return next;
 }
 
+export function updateMultiplication(state, multiplication) {
+  const next = { ...state, multiplication };
+  persist(next);
+  return next;
+}
+
 export function updateSetting(state, key, value) {
   const settings = { ...state.settings, [key]: value };
   const next = { ...state, settings };
@@ -482,5 +491,6 @@ export function getSkillProgress(state) {
   const unlockedLevelCount = getUnlockedLevelIndex(state.levelStars) + 1;
   return {
     addition: Math.round((unlockedLevelCount / LEVEL_COUNT) * 100),
+    multiplication: getMultiplicationProgress(state.multiplication),
   };
 }

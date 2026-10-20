@@ -13,7 +13,15 @@ import {
   PUZZLES_PER_LEVEL,
   REWARD_GROUPS,
   unlockProgressToLevel,
+  updateMultiplication,
+  resetProgress,
 } from '../www/src/engine/game.js';
+
+import {
+  TIMES_TABLES, createMultiplication, startMultiplicationRound,
+  getMultiplicationQuestion, submitMultiplicationAnswer,
+  requestMultiplicationHint, nextMultiplicationQuestion,
+} from '../www/src/engine/multiplication.js';
 
 function minimumSolutionSize(puzzle) {
   for (let size = 1; size <= puzzle.pieces.length; size++) {
@@ -39,10 +47,11 @@ function minimumSolutionSize(puzzle) {
 
 function withSavedState(savedState, fn) {
   const previousStorage = globalThis.localStorage;
+  let stored = JSON.stringify(savedState);
   globalThis.localStorage = {
-    getItem: () => JSON.stringify(savedState),
-    setItem: () => {},
-    removeItem: () => {},
+    getItem: () => stored,
+    setItem: (_key, value) => { stored = value; },
+    removeItem: () => { stored = null; },
   };
 
   try {
@@ -102,8 +111,8 @@ describe('game rules', () => {
       levelStars: Object.fromEntries(Array.from({ length: LEVEL_COUNT }, (_, i) => [i, 1])),
     };
 
-    assert.deepEqual(getSkillProgress(level10State), { addition: 13 });
-    assert.deepEqual(getSkillProgress(completedState), { addition: 100 });
+    assert.deepEqual(getSkillProgress(level10State), { addition: 13, multiplication: 0 });
+    assert.deepEqual(getSkillProgress(completedState), { addition: 100, multiplication: 0 });
   });
 
   it('does not lower existing progress when unlocking an earlier level', () => {
@@ -167,5 +176,162 @@ describe('game rules', () => {
     }
 
     assert.deepEqual([...solutionSizes].sort((a, b) => a - b), [2, 3, 4]);
+  });
+});
+
+describe('multiplication garden rules', () => {
+  function solveRound(practice) {
+    while (!practice.round.complete) {
+      const question = getMultiplicationQuestion(practice);
+      practice = submitMultiplicationAnswer(practice, String(question.answer));
+      practice = nextMultiplicationQuestion(practice);
+    }
+    return practice;
+  }
+
+  it('opens all ten tables and covers factors 1 to 10 exactly once per round', () => {
+    for (const table of TIMES_TABLES) {
+      for (const seed of [0, 1, 42, 314159]) {
+        let practice = startMultiplicationRound(createMultiplication(), table, seed);
+        assert.deepEqual([...practice.round.factors].sort((a, b) => a - b), TIMES_TABLES);
+        for (let index = 0; index < 10; index++) {
+          const question = getMultiplicationQuestion(practice);
+          assert.equal(question.table, table);
+          assert.equal(question.answer, table * question.factor);
+          practice = submitMultiplicationAnswer(practice, String(question.answer));
+          practice = nextMultiplicationQuestion(practice);
+        }
+        assert.equal(practice.round.complete, true);
+        assert.equal(practice.round.results.length, 10);
+        assert.deepEqual(practice.progress[table], { rounds: 1, best: 10 });
+      }
+    }
+  });
+
+  it('repeats a seeded order and varies the order with another seed', () => {
+    const initial = createMultiplication();
+    const first = startMultiplicationRound(initial, 5, 42);
+    assert.deepEqual(first, startMultiplicationRound(initial, 5, 42));
+    assert.notDeepEqual(first.round.factors, startMultiplicationRound(initial, 5, 43).round.factors);
+    assert.equal(initial.round, null);
+  });
+
+  it('rejects tables outside 1 to 10 without changing a current round', () => {
+    const practice = startMultiplicationRound(createMultiplication(), 6);
+    for (const table of [0, 11, -1, 1.5, NaN, '5', null]) {
+      assert.equal(startMultiplicationRound(practice, table), practice);
+    }
+  });
+
+  it('requires a whole-number answer and does not count empty input as a mistake', () => {
+    const practice = startMultiplicationRound(createMultiplication(), 5);
+    for (const input of ['', ' ', '1e1', '5.0', '-5', 'abc', '1000', null, undefined]) {
+      const result = submitMultiplicationAnswer(practice, input);
+      assert.equal(result.round.feedback, 'invalid');
+      assert.equal(result.round.wrongAttempts, 0);
+      assert.equal(result.round.results.length, 0);
+    }
+  });
+
+  it('lets the child correct an answer without skipping or losing flowers', () => {
+    const initial = startMultiplicationRound(createMultiplication(), 6);
+    const answer = getMultiplicationQuestion(initial).answer;
+    const wrong = submitMultiplicationAnswer(initial, '0');
+    assert.equal(wrong.round.feedback, 'wrong');
+    assert.equal(wrong.round.index, 0);
+    assert.equal(nextMultiplicationQuestion(wrong), wrong);
+    assert.equal(wrong.round.results.length, 0);
+    const corrected = submitMultiplicationAnswer(wrong, String(answer));
+    assert.equal(corrected.round.results[0].independent, false);
+    assert.equal(initial.round.wrongAttempts, 0);
+    const next = nextMultiplicationQuestion(corrected);
+    assert.equal(next.round.index, 1);
+    assert.equal(next.round.wrongAttempts, 0);
+    assert.equal(next.round.feedback, null);
+    const completed = solveRound(next);
+    assert.deepEqual(completed.progress[6], { rounds: 1, best: 9 });
+  });
+
+  it('keeps help visible for a question and resets it for the next one', () => {
+    let practice = startMultiplicationRound(createMultiplication(), 5);
+    practice = requestMultiplicationHint(practice);
+    assert.equal(practice.round.hintUsed, true);
+    practice = submitMultiplicationAnswer(practice, String(getMultiplicationQuestion(practice).answer));
+    assert.equal(practice.round.results[0].independent, false);
+    practice = nextMultiplicationQuestion(practice);
+    assert.equal(practice.round.hintUsed, false);
+    assert.equal(solveRound(practice).progress[5].best, 9);
+  });
+
+  it('does not skip unanswered questions or count repeated submissions twice', () => {
+    let practice = startMultiplicationRound(createMultiplication(), 10);
+    assert.equal(nextMultiplicationQuestion(practice), practice);
+    for (let index = 0; index < 10; index++) {
+      const answer = String(getMultiplicationQuestion(practice).answer);
+      practice = submitMultiplicationAnswer(practice, answer);
+      assert.equal(submitMultiplicationAnswer(practice, answer), practice);
+      assert.equal(requestMultiplicationHint(practice), practice);
+      practice = nextMultiplicationQuestion(practice);
+    }
+    assert.equal(practice.progress[10].rounds, 1);
+    assert.equal(getMultiplicationQuestion(practice), null);
+    assert.equal(submitMultiplicationAnswer(practice, '100'), practice);
+    assert.equal(nextMultiplicationQuestion(practice), practice);
+  });
+
+  it('keeps the best score on replay and separates table progress', () => {
+    let practice = solveRound(startMultiplicationRound(createMultiplication(), 5));
+    practice = startMultiplicationRound(practice, 5, 2);
+    practice = solveRound(requestMultiplicationHint(practice));
+    assert.deepEqual(practice.progress[5], { rounds: 2, best: 10 });
+    practice = solveRound(startMultiplicationRound(practice, 6));
+    assert.deepEqual(practice.progress[6], { rounds: 1, best: 10 });
+    assert.equal(practice.progress[7], undefined);
+    assert.equal(getSkillProgress({ ...createGame(), multiplication: practice }).multiplication, 20);
+  });
+
+  it('ignores unfinished rounds in saved progress', () => {
+    let practice = startMultiplicationRound(createMultiplication(), 1);
+    practice = submitMultiplicationAnswer(practice, String(getMultiplicationQuestion(practice).answer));
+    assert.deepEqual(practice.progress, {});
+  });
+
+  it('loads old saves and sanitizes saved multiplication scores', () => {
+    withSavedState({ currentLevelIndex: 0, levelStars: {} }, () => {
+      assert.deepEqual(createGame().multiplication, { progress: {}, round: null });
+    });
+    const practice = createMultiplication({
+      1: { rounds: 2, best: 12 },
+      2: { rounds: 1, best: -1 },
+      3: { rounds: -1, best: 10 },
+      4: { rounds: 1, best: '10' },
+      11: { rounds: 1, best: 10 },
+    });
+    assert.deepEqual(practice.progress, {
+      1: { rounds: 2, best: 10 }, 2: { rounds: 1, best: 0 }, 4: { rounds: 1, best: 0 },
+    });
+  });
+
+  it('saves multiplication separately from addition and resets both together', () => {
+    withSavedState({
+      currentLevelIndex: 1, currentPuzzleIndex: 3,
+      levelStars: { 0: 3 }, totalStars: 3, settings: { sound: false },
+    }, () => {
+      const initial = createGame();
+      const practice = solveRound(startMultiplicationRound(initial.multiplication, 6));
+      updateMultiplication(initial, practice);
+      const loaded = createGame();
+      assert.deepEqual(loaded.multiplication.progress[6], { rounds: 1, best: 10 });
+      assert.equal(loaded.multiplication.round, null);
+      assert.equal(loaded.currentLevelIndex, 1);
+      assert.equal(loaded.currentPuzzleIndex, 3);
+      assert.deepEqual(loaded.levelStars, { 0: 3 });
+      assert.equal(loaded.totalStars, 3);
+      assert.deepEqual(loaded.settings, { sound: false });
+      resetProgress();
+      const reset = createGame();
+      assert.deepEqual(reset.multiplication.progress, {});
+      assert.deepEqual(reset.levelStars, {});
+    });
   });
 });
