@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="nb"><meta charset="utf-8"><title>Mattelek – visningskontroll</title>
 <style>body{margin:20px;background:#e5e7eb;font:16px system-ui}nav{margin-bottom:16px}a{margin-right:20px}iframe{border:0;box-shadow:0 0 0 1px #bbb;display:block;background:white}</style>
-<nav><a href="?size=mobile">Mobil 360 × 740</a><a href="?size=tablet">Nettbrett 820 × 900</a><a href="?size=landscape">Liggende 667 × 375</a></nav>
+<nav><a href="?size=mobile">Mobil 360 × 640</a><a href="?size=tablet">Nettbrett 820 × 600</a><a href="?size=landscape">Liggende 667 × 375</a></nav>
 <iframe title="Mattelek forhåndsvisning" src="/"></iframe>
-<script>const sizes={mobile:[360,740],tablet:[820,900],landscape:[667,375]};const size=sizes[new URLSearchParams(location.search).get('size')]||sizes.mobile;const frame=document.querySelector('iframe');frame.width=size[0];frame.height=size[1];</script>
+<script>const sizes={mobile:[360,640],tablet:[820,600],landscape:[667,375]};const size=sizes[new URLSearchParams(location.search).get('size')]||sizes.mobile;const frame=document.querySelector('iframe');frame.width=size[0];frame.height=size[1];</script>
 </html>

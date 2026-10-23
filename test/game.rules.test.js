@@ -28,6 +28,8 @@ import {
 import {
   SUBTRACTION_ROUND_SIZE, createSubtraction, startSubtractionRound,
   getSubtractionQuestion, submitSubtractionAnswer, nextSubtractionQuestion,
+  SUBTRACTION_LEVEL_COUNT, getSubtractionLevelMax, getUnlockedSubtractionLevel,
+  isSubtractionLevelUnlocked, unlockSubtractionToLevel,
 } from '../www/src/engine/subtraction.js';
 
 function minimumSolutionSize(puzzle) {
@@ -356,17 +358,17 @@ describe('subtraction rules', () => {
 
   it('keeps the best first-attempt score when replaying', () => {
     let practice = solveRound(startSubtractionRound(createSubtraction(), 42));
-    practice = startSubtractionRound(practice, 43);
+    practice = startSubtractionRound(practice, 43, 0);
     const q = getSubtractionQuestion(practice);
     practice = submitSubtractionAnswer(practice, q.choices.find(choice => choice !== q.answer));
     practice = solveRound(practice);
     assert.deepEqual(practice.progress, { rounds: 2, best: 10 });
-    assert.equal(getSkillProgress({ ...createGame(), subtraction: practice }).subtraction, 100);
+    assert.equal(getSkillProgress({ ...createGame(), subtraction: practice }).subtraction, 1);
   });
 
   it('defaults old saves and sanitizes invalid progress', () => {
     withSavedState({ levelStars: {} }, () => {
-      assert.deepEqual(createGame().subtraction, { progress: { rounds: 0, best: 0 }, round: null });
+      assert.deepEqual(createGame().subtraction, { progress: { rounds: 0, best: 0 }, levels: { stars: {}, currentLevelIndex: 0 }, round: null });
     });
     for (const saved of [null, {}, { rounds: -1, best: 10 }, { rounds: '1', best: 10 }, { rounds: 0, best: 10 }]) {
       assert.deepEqual(createSubtraction(saved).progress, { rounds: 0, best: 0 });
@@ -408,6 +410,80 @@ describe('subtraction rules', () => {
       assert.deepEqual(reset.multiplication.progress, {});
       assert.deepEqual(reset.levelStars, {});
     });
+  });
+
+  it('unlocks all 80 subtraction levels one at a time and increases the number range', () => {
+    let practice = createSubtraction();
+    let previousMax = 0;
+    for (let level = 0; level < SUBTRACTION_LEVEL_COUNT; level++) {
+      assert.equal(getUnlockedSubtractionLevel(practice), level);
+      assert.equal(isSubtractionLevelUnlocked(practice, level + 1), false);
+      assert.equal(startSubtractionRound(practice, 42, level + 1), practice);
+      practice = startSubtractionRound(practice, 42, level);
+      const maximum = getSubtractionLevelMax(level);
+      assert.ok(maximum > previousMax);
+      previousMax = maximum;
+      assert.equal(new Set(practice.round.questions.map(q => q.minuend)).size, 10);
+      assert.equal(Math.max(...practice.round.questions.map(q => q.minuend)), maximum);
+      for (const q of practice.round.questions) {
+        assert.equal(q.answer, q.minuend - q.subtrahend);
+        assert.ok(q.answer >= 0);
+        assert.equal(new Set(q.choices).size, 4);
+        assert.equal(q.choices.filter(value => value === q.answer).length, 1);
+        assert.ok(q.choices.every(value => value >= 0 && value <= maximum));
+      }
+      practice = solveRound(practice);
+      assert.equal(practice.levels.stars[level], 3);
+    }
+    assert.equal(previousMax, 160);
+    assert.equal(practice.levels.currentLevelIndex, 79);
+    assert.equal(getSkillProgress({ ...createGame(), subtraction: practice }).subtraction, 100);
+  });
+
+  it('awards subtraction stars using all mistakes and keeps the best on replay', () => {
+    for (const [mistakes, stars] of [[0, 3], [1, 2], [3, 2], [4, 1]]) {
+      let practice = startSubtractionRound(createSubtraction(), 9);
+      const wrongAnswer = getSubtractionQuestion(practice).answer + 1;
+      for (let count = 0; count < mistakes; count++) practice = submitSubtractionAnswer(practice, wrongAnswer);
+      practice = solveRound(practice);
+      assert.equal(practice.round.stars, stars);
+      assert.equal(practice.levels.stars[0], stars);
+      practice = solveRound(startSubtractionRound(practice, 10, 0));
+      assert.equal(practice.levels.stars[0], 3);
+      practice = startSubtractionRound(practice, 11, 0);
+      practice = submitSubtractionAnswer(practice, getSubtractionQuestion(practice).answer + 1);
+      practice = solveRound(practice);
+      assert.equal(practice.round.stars, 2);
+      assert.equal(practice.levels.stars[0], 3);
+      assert.equal(Object.keys(practice.levels.stars).length, 1);
+    }
+  });
+
+  it('preserves legacy subtraction results and repairs saved level data', () => {
+    const migrated = createSubtraction({ rounds: 4, best: 10 });
+    assert.deepEqual(migrated.levels, { stars: { 0: 3 }, currentLevelIndex: 1 });
+    assert.deepEqual(migrated.progress, { rounds: 4, best: 10 });
+    const repaired = createSubtraction({}, { stars: { 0: 2, 1: 7, 2: '3', 80: 3 }, currentLevelIndex: 50 });
+    assert.deepEqual(repaired.levels, { stars: { 0: 2 }, currentLevelIndex: 1 });
+    for (const level of [-1, 80, NaN, 1.5]) assert.equal(startSubtractionRound(repaired, 0, level), repaired);
+    withSavedState({ subtractionProgress: { rounds: 1, best: 9 } }, () => {
+      const game = createGame();
+      const practice = solveRound(startSubtractionRound(game.subtraction, 10));
+      updateSubtraction(game, practice);
+      assert.deepEqual(createGame().subtraction.levels, { stars: { 0: 2, 1: 3 }, currentLevelIndex: 2 });
+      assert.equal(createGame().subtraction.round, null);
+    });
+  });
+
+  it('allows parent unlocking without lowering subtraction stars or progress', () => {
+    const initial = solveRound(startSubtractionRound(createSubtraction()));
+    const unlocked = unlockSubtractionToLevel(initial, 20);
+    assert.equal(getUnlockedSubtractionLevel(unlocked), 19);
+    assert.equal(unlocked.levels.stars[0], 3);
+    assert.equal(unlocked.levels.currentLevelIndex, 19);
+    assert.equal(unlocked.round, null);
+    assert.deepEqual(unlockSubtractionToLevel(unlocked, 5).levels, unlocked.levels);
+    for (const level of [0, 81, NaN, 1.5]) assert.equal(unlockSubtractionToLevel(unlocked, level), unlocked);
   });
 });
 

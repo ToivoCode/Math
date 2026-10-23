@@ -273,6 +273,7 @@ function persist(state) {
       settings:           state.settings,
       multiplicationProgress: state.multiplication.progress,
       subtractionProgress: state.subtraction.progress,
+      subtractionLevels: state.subtraction.levels,
     }));
   } catch { /* storage unavailable */ }
 }
@@ -289,7 +290,7 @@ export function createGame() {
   return {
     screen:             'home',
     multiplication:     createMultiplication(saved.multiplicationProgress),
-    subtraction:        createSubtraction(saved.subtractionProgress),
+    subtraction:        createSubtraction(saved.subtractionProgress, saved.subtractionLevels),
     currentLevelIndex,
     currentPuzzleIndex,
     selectedPieces:     new Set(),
