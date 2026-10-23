@@ -1403,3 +1403,106 @@ body {
   .garden-plot.bloomed .garden-flower { animation: none; }
   .times-table-card { transition: none; }
 }
+
+/* Minus — sky, a friendly fox, and large answer tiles. */
+.btn-subtraction { background: linear-gradient(135deg, #237CA6, #2969A1); }
+.screen-subtraction { background: linear-gradient(150deg, #F1FAFF, #FFFFFF 60%, #EDF9FF); color: #153352; }
+.subtraction-header { display: flex; justify-content: space-between; align-items: center; width: min(100%, 680px); margin: 0 auto; padding: 14px 24px 10px; flex-shrink: 0; }
+.subtraction-brand { display: flex; align-items: center; gap: 9px; }
+.subtraction-brand img { object-fit: contain; }
+.subtraction-title { font-size: 1.9rem; font-weight: 900; line-height: 1.1; letter-spacing: -0.04em; }
+.subtraction-brand p { font-size: 0.85rem; font-weight: 700; color: #657E9B; margin-top: 3px; }
+.subtraction-menu { position: relative; z-index: 5; }
+.subtraction-menu summary { display: grid; place-items: center; width: 46px; height: 46px; border-radius: 50%; background: #DEF1FE; cursor: pointer; list-style: none; font-size: 1.65rem; }
+.subtraction-menu summary::-webkit-details-marker { display: none; }
+.subtraction-menu nav { position: absolute; right: 0; top: 54px; width: 210px; display: grid; padding: 8px; border: 1px solid #D3E8F5; border-radius: 18px; background: #FFF; box-shadow: 0 8px 24px #1738561A; }
+.subtraction-menu button { font: 800 0.95rem var(--font); text-align: left; padding: 13px 10px; border: 0; border-radius: 10px; color: #153352; background: none; cursor: pointer; }
+.subtraction-menu button:hover { background: #EAF6FE; }
+.subtraction-main { position: relative; z-index: 1; width: min(100%, 640px); margin: 0 auto; padding: 8px 18px 0; }
+.subtraction-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.subtraction-back { border: 0; border-radius: 999px; padding: 10px 16px; min-height: 44px; background: #DDF1FF; color: #28618B; font: 800 0.95rem var(--font); cursor: pointer; }
+.subtraction-progress { width: 43%; min-width: 138px; text-align: right; }
+.subtraction-progress label { display: block; font-size: 0.85rem; font-weight: 800; margin-bottom: 5px; }
+.subtraction-progress progress { display: block; width: 100%; height: 11px; border: none; border-radius: 999px; background: #DCE9F5; overflow: hidden; appearance: none; }
+.subtraction-progress progress::-webkit-progress-bar { background: #DCE9F5; border-radius: 999px; }
+.subtraction-progress progress::-webkit-progress-value { background: #58AD62; border-radius: 999px; }
+.subtraction-progress progress::-moz-progress-bar { background: #58AD62; border-radius: 999px; }
+.subtraction-puzzle { position: relative; isolation: isolate; overflow: hidden; display: flex; flex-direction: column; align-items: center; gap: 9px; padding: 20px 16px 29px; border-radius: 28px; background: linear-gradient(145deg, #AFE2FA, #D8F3FF); }
+.subtraction-puzzle h1 { z-index: 1; border-radius: 999px; background: #FFF0AE; padding: 2px 29px 5px; font-size: 1.85rem; font-weight: 900; }
+.subtraction-equation { z-index: 1; width: 77%; padding: 12px 8px; border-radius: 25px; background: #FFFFFFF5; font-size: clamp(2.15rem, 7.8vw, 3.8rem); line-height: 1.4; font-weight: 900; text-align: center; white-space: nowrap; letter-spacing: 0.01em; }
+.subtraction-puzzle p { z-index: 3; margin-left: 40px; font-size: 1.05rem; font-weight: 800; }
+.subtraction-fox { position: absolute; z-index: 2; bottom: -5px; left: -4px; width: 23%; height: auto; max-height: 140px; }
+.subtraction-cloud { position: absolute; width: 52px; height: 19px; background: #F6FCFF; border-radius: 40px; opacity: 0.9; z-index: -1; }
+.subtraction-cloud::before, .subtraction-cloud::after { content: ''; position: absolute; bottom: 6px; border-radius: 50%; background: inherit; width: 27px; height: 27px; left: 9px; }
+.subtraction-cloud::after { width: 21px; height: 21px; left: 29px; bottom: 2px; }
+.cloud-left { left: 14px; top: 47px; transform: rotate(-8deg); }
+.cloud-right { right: 12px; top: 53px; transform: scale(0.85) rotate(8deg); }
+.subtraction-bushes { position: absolute; z-index: 0; bottom: 0; inset-inline: 0; height: 88px; background: radial-gradient(ellipse 22px 31px at 4% 76%, #82BE70 98%, transparent), radial-gradient(ellipse 28px 32px at 15% 96%, #8DC977 98%, transparent), radial-gradient(ellipse 23px 21px at 25% 105%, #7ABB71 98%, transparent), radial-gradient(ellipse 34px 36px at 100% 36%, #6EB568 98%, transparent), radial-gradient(ellipse 28px 35px at 94% 63%, #6EB568 98%, transparent), radial-gradient(ellipse 34px 35px at 89% 98%, #83C073 98%, transparent), radial-gradient(ellipse 32px 20px at 80% 107%, #83C073 98%, transparent); }
+.subtraction-form { margin-top: 14px; }
+.subtraction-form label { display: block; font-size: 0.85rem; font-weight: 800; margin-bottom: 5px; }
+.subtraction-answer-row { display: flex; gap: 10px; }
+#subtraction-answer { width: 40%; min-width: 0; min-height: 50px; border: 2px solid #9BCDE8; border-radius: 16px; padding: 8px 10px; background: #FFF; color: #153352; text-align: center; font: 900 1.45rem var(--font); }
+#subtraction-answer::placeholder { font-size: 1rem; font-weight: 700; color: #657E9B; }
+#subtraction-answer[aria-invalid="true"] { border-color: #BB812F; }
+#subtraction-answer:disabled { background: #E0F7E5; border-color: #9DDBA4; color: #12632A; opacity: 1; -webkit-text-fill-color: #12632A; }
+.subtraction-check { flex: 1; min-width: 0; min-height: 50px; border: 0; border-radius: 16px; padding: 8px 12px; background: #286F9C; color: #FFF; font: 800 1rem var(--font); cursor: pointer; }
+.subtraction-check:not(:disabled):hover { background: #205C83; }
+.subtraction-check:disabled { background: #E4EDF1; color: #6A7E87; cursor: default; }
+.subtraction-choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+.subtraction-choice { position: relative; border: 2px solid transparent; border-radius: 22px; background: #E3F3FE; color: #153352; min-height: 86px; padding: 8px; font: 900 clamp(2.2rem, 8vw, 3.4rem) var(--font); cursor: pointer; transition: background 0.15s, border-color 0.15s; }
+.subtraction-choice:not(:disabled):hover { background: #D4ECFD; border-color: #95CBE9; }
+.subtraction-choice.is-correct { border-color: #9DDBA4; background: #D2F2D0; color: #12632A; }
+.subtraction-choice.is-wrong, .subtraction-choice.is-wrong:hover { border-color: #E6B86F; background: #FFF0D7; color: #85551B; }
+.subtraction-choice:disabled { cursor: default; opacity: 1; }
+.subtraction-choice-mark { position: absolute; right: 7px; top: 7px; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 50%; background: #49A32D; color: #FFF; font-size: 1.1rem; line-height: 1; }
+.subtraction-choice.is-wrong .subtraction-choice-mark { background: #986321; }
+.subtraction-feedback { display: flex; align-items: center; gap: 14px; min-height: 78px; padding: 12px 20px; margin-top: 14px; border-radius: 22px; color: #52677C; font-size: 0.95rem; }
+.subtraction-feedback > p { text-align: center; width: 100%; }
+.subtraction-feedback.is-correct { background: #E0F7E5; }
+.subtraction-feedback.is-wrong { background: #FFF2DC; }
+.subtraction-feedback strong { display: block; color: #17672D; font-size: 1.2rem; font-weight: 900; }
+.subtraction-feedback.is-wrong strong { color: #85551B; }
+.subtraction-feedback p { margin-top: 2px; }
+.subtraction-feedback-icon { display: grid; place-items: center; flex-shrink: 0; width: 45px; height: 45px; background: linear-gradient(135deg, #66BB30, #3C9D30); border-radius: 50%; color: #FFF; font-size: 1.9rem; font-weight: 900; }
+.subtraction-feedback.is-wrong .subtraction-feedback-icon { background: #986321; }
+.subtraction-next { display: flex; justify-content: center; align-items: center; gap: 14px; width: 100%; min-height: 56px; border: 1px solid #409944; border-top: 3px solid #83C971; border-radius: 999px; margin-top: 14px; padding: 10px 18px; background: linear-gradient(135deg, #5DAD4E, #46994D); color: #FFF; font: 900 1.3rem var(--font); cursor: pointer; text-shadow: 0 1px 1px #21622C44; }
+.subtraction-next span { font-size: 1.65rem; line-height: 1; }
+.subtraction-next:not(:disabled):hover { background: #398E42; }
+.subtraction-next:disabled { background: #E4EDF1; border-color: #D8E5EB; color: #6A7E87; text-shadow: none; cursor: default; }
+.subtraction-meadow { flex: 1 0 70px; min-height: 70px; width: 100%; margin-top: 6px; background: url('./img/minus-meadow.svg') center bottom / 100% 100px no-repeat; padding-bottom: env(safe-area-inset-bottom, 0px); }
+.subtraction-summary { text-align: center; padding: 30px 22px; border-radius: 28px; background: #FFF; box-shadow: 0 6px 30px #1738560A; }
+.subtraction-summary h1 { font-size: 1.7rem; font-weight: 900; margin: 12px 0; }
+.subtraction-summary p { line-height: 1.6; color: #52677C; margin-top: 6px; }
+.subtraction-summary .subtraction-back { margin-top: 16px; }
+.screen-subtraction button:focus-visible,
+#subtraction-answer:focus-visible,
+.subtraction-menu summary:focus-visible { outline: 3px solid #236E9B; outline-offset: 3px; }
+.subtraction-equation:focus, #subtraction-result:focus { outline: none; }
+
+@media (min-width: 768px) {
+  .subtraction-header { padding-top: 22px; }
+  .subtraction-title { font-size: 2.2rem; }
+  .subtraction-puzzle { padding-top: 20px; padding-bottom: 24px; }
+  .subtraction-choice { min-height: 94px; }
+}
+
+@media (max-width: 480px) {
+  .bottom-nav .nav-btn { min-width: 0; }
+  .bottom-nav .nav-label { font-size: 0.53rem; letter-spacing: 0; }
+}
+
+@media (max-width: 360px) {
+  .subtraction-header { padding: 10px 16px 6px; }
+  .subtraction-title { font-size: 1.65rem; }
+  .subtraction-main { padding-inline: 12px; }
+  .subtraction-toolbar { gap: 8px; }
+  .subtraction-back { padding-inline: 12px; }
+  .subtraction-puzzle { padding: 16px 10px 24px; }
+  .subtraction-equation { width: 83%; }
+  .subtraction-feedback { gap: 10px; padding-inline: 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .screen-subtraction.entering { animation: none; }
+  .subtraction-choice { transition: none; }
+}

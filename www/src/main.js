@@ -2,7 +2,7 @@
 import {
   createGame, getCurrentPuzzle, selectPiece, undoLast,
   submitAnswer, requestHint, nextPuzzle, nextLevel, goToLevel, goToScreen,
-  unlockProgressToLevel, updateSetting, updateMultiplication, unlockParent, resetProgress, getSkillProgress,
+  unlockProgressToLevel, updateSetting, updateMultiplication, updateSubtraction, unlockParent, resetProgress, getSkillProgress,
   getActiveLevelIndex, getActivePuzzleIndex, getUnlockedLevelIndex, isLevelUnlocked,
   LEVEL_COUNT, PUZZLES_PER_LEVEL, PIECE_COLORS, REWARD_GROUPS,
 } from './engine/game.js';
@@ -11,6 +11,10 @@ import {
   getMultiplicationQuestion, submitMultiplicationAnswer,
   requestMultiplicationHint, nextMultiplicationQuestion,
 } from './engine/multiplication.js';
+import {
+  SUBTRACTION_ROUND_SIZE, startSubtractionRound, getSubtractionQuestion,
+  submitSubtractionAnswer, nextSubtractionQuestion,
+} from './engine/subtraction.js';
 
 let state = createGame();
 const app = document.getElementById('app');
@@ -196,6 +200,7 @@ function renderBottomNav() {
   const btns = [
     { action: 'nav-home',     icon: '🏠', label: 'Hjem',        screen: 'home'     },
     { action: 'nav-play',     icon: '➕', label: 'Addisjon',    screen: 'play'     },
+    { action: 'subtraction-open', icon: '➖', label: 'Minus', screen: 'subtraction' },
     { action: 'multiplication-tables', icon: '🌻', label: 'Gange', screen: 'tables' },
     { action: 'nav-rewards',  icon: '🎁', label: 'Belønninger', screen: 'rewards'  },
     { action: 'nav-progress', icon: '📊', label: 'Fremgang',    screen: 'progress' },
@@ -229,6 +234,13 @@ function renderHome() {
           <div>
             <div class="btn-label">Addisjon</div>
             <div class="btn-sub">Fortsett på nivå ${state.currentLevelIndex + 1}</div>
+          </div>
+        </button>
+        <button class="menu-btn btn-subtraction" data-action="subtraction-open">
+          <span class="btn-icon" aria-hidden="true">➖</span>
+          <div>
+            <div class="btn-label">Minus</div>
+            <div class="btn-sub">${state.subtraction.round && !state.subtraction.round.complete ? 'Fortsett med minusoppgavene' : 'Trekk fra med tall opptil 10'}</div>
           </div>
         </button>
         <button class="menu-btn btn-multiplication" data-action="multiplication-tables">
@@ -488,12 +500,97 @@ function renderMultiplication() {
   </div>`;
 }
 
+// ── Minus ─────────────────────────────────────────────────────────────────────
+
+function renderSubtraction() {
+  const round = state.subtraction.round;
+  if (!round) return renderHome();
+  const question = getSubtractionQuestion(state.subtraction);
+  const correct = round.feedback === 'correct';
+  const independentCount = round.results.filter(result => result.independent).length;
+  return `<div class="screen screen-subtraction">
+    <header class="subtraction-header">
+      <div class="subtraction-brand">
+        <img src="img/minus-fox.svg" alt="" width="54" height="64" />
+        <div><div class="subtraction-title">Mattelek</div><p>Matte for barn</p></div>
+      </div>
+      <details class="subtraction-menu">
+        <summary aria-label="Åpne meny"><span aria-hidden="true">☰</span></summary>
+        <nav aria-label="Meny">
+          <button data-action="home">🏠 Hjem</button>
+          <button data-action="nav-progress">📊 Fremgang</button>
+          <button data-action="parent">👨‍👩‍👧 Foreldreområde</button>
+        </nav>
+      </details>
+    </header>
+    <main class="subtraction-main">
+      <div class="subtraction-toolbar">
+        <button class="subtraction-back" data-action="home">← Tilbake</button>
+        <div class="subtraction-progress">
+          <label for="subtraction-progress">${round.complete ? 'Alle oppgavene er løst!' : `Oppgave ${round.index + 1} av ${SUBTRACTION_ROUND_SIZE}`}</label>
+          <progress id="subtraction-progress" value="${round.results.length}" max="${SUBTRACTION_ROUND_SIZE}">${round.results.length} av ${SUBTRACTION_ROUND_SIZE} løst</progress>
+        </div>
+      </div>
+      ${round.complete ? `<section class="subtraction-summary">
+        <img src="img/minus-fox.svg" alt="" width="112" height="134" />
+        <h1 id="subtraction-result" tabindex="-1">Hurra, du klarte alle 10! 🎉</h1>
+        <p>Du løste <strong>${independentCount} av 10</strong> på første forsøk.</p>
+        <p>${independentCount === SUBTRACTION_ROUND_SIZE ? 'Du er en minusmester!' : 'Godt jobbet! Hver runde gjør deg litt tryggere.'}</p>
+        <button class="subtraction-next" data-action="subtraction-start">Spill en gang til <span aria-hidden="true">→</span></button>
+        <button class="subtraction-back" data-action="home">Tilbake til forsiden</button>
+      </section>` : `
+        <section class="subtraction-puzzle" aria-labelledby="subtraction-heading">
+          <span class="subtraction-cloud cloud-left" aria-hidden="true"></span>
+          <span class="subtraction-cloud cloud-right" aria-hidden="true"></span>
+          <h1 id="subtraction-heading">Minus</h1>
+          <h2 class="subtraction-equation" id="subtraction-question" tabindex="-1" aria-label="${question.minuend} minus ${question.subtrahend}. Hva blir svaret?">
+            ${question.minuend} − ${question.subtrahend} = ?
+          </h2>
+          <p>Hva blir svaret?</p>
+          <img class="subtraction-fox" src="img/minus-fox.svg" alt="" width="112" height="134" />
+          <span class="subtraction-bushes" aria-hidden="true"></span>
+        </section>
+        <form id="subtraction-form" class="subtraction-form" novalidate>
+          <label for="subtraction-answer">Svaret ditt</label>
+          <div class="subtraction-answer-row">
+            <input id="subtraction-answer" name="answer" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="3" autocomplete="off" enterkeyhint="done"
+              placeholder="Skriv et tall" value="${round.selectedAnswer ?? ''}" aria-describedby="subtraction-feedback"
+              ${['wrong', 'invalid'].includes(round.feedback) ? 'aria-invalid="true"' : ''} ${correct ? 'disabled' : ''} />
+            <button type="submit" class="subtraction-check" ${correct ? 'disabled' : ''}>Sjekk svar <span aria-hidden="true">→</span></button>
+          </div>
+        </form>
+        <div class="subtraction-choices" role="group" aria-labelledby="subtraction-question">
+          ${question.choices.map(answer => {
+            const selected = round.selectedAnswer === answer;
+            const answerState = selected ? (correct ? 'is-correct' : 'is-wrong') : '';
+            return `<button class="subtraction-choice ${answerState}" data-action="subtraction-answer" data-answer="${answer}"
+              aria-label="${answer}${selected ? (correct ? ', riktig svar' : ', prøv igjen') : ''}" ${selected ? 'aria-describedby="subtraction-feedback"' : ''} ${correct ? 'disabled' : ''}>
+              ${answer}${selected ? `<span class="subtraction-choice-mark" aria-hidden="true">${correct ? '✓' : '×'}</span>` : ''}
+            </button>`;
+          }).join('')}
+        </div>
+        <div class="subtraction-feedback ${correct ? 'is-correct' : round.feedback === 'wrong' ? 'is-wrong' : ''}" id="subtraction-feedback" role="status" aria-live="polite" aria-atomic="true">
+          ${correct ? `<span class="subtraction-feedback-icon" aria-hidden="true">✓</span><div><strong>Helt riktig! 🎉</strong><p>${question.minuend} minus ${question.subtrahend} er ${question.answer}.</p></div>`
+            : round.feedback === 'wrong' ? `<span class="subtraction-feedback-icon" aria-hidden="true">↻</span><div><strong>Prøv en gang til!</strong><p>Start på ${question.minuend} og tell ${question.subtrahend} tilbake.</p></div>`
+            : round.feedback === 'invalid' ? '<p>Skriv et helt tall i svarfeltet først.</p>'
+            : '<p>Skriv svaret eller velg et tall.</p>'}
+        </div>
+        <button class="subtraction-next" data-action="subtraction-next" aria-describedby="subtraction-feedback" ${correct ? '' : 'disabled'}>
+          ${round.results.length === SUBTRACTION_ROUND_SIZE ? 'Se resultatet' : 'Neste oppgave'} <span aria-hidden="true">→</span>
+        </button>
+      `}
+    </main>
+    <div class="subtraction-meadow" aria-hidden="true"></div>
+  </div>`;
+}
+
 function renderProgress() {
   const skill         = getSkillProgress(state);
   const unlockedLevel = getUnlockedLevelIndex(state.levelStars) + 1;
 
   const skillRows = [
     { key: 'addition',  label: 'Addisjon',    emoji: '➕', color: '#7C3AED' },
+    { key: 'subtraction', label: 'Minus · på første forsøk', emoji: '➖', color: '#2782B1' },
     { key: 'multiplication', label: 'Gange · på egen hånd', emoji: '🌻', color: '#15803D' },
   ].map(r => `
     <div class="skill-row">
@@ -672,11 +769,13 @@ function renderParent() {
           <div class="report-row"><span>Nåværende nivå</span><strong>${state.currentLevelIndex + 1}</strong></div>
           <div class="report-row"><span>Gangetabeller øvd på</span><strong>${Object.keys(state.multiplication.progress).length} / 10</strong></div>
           <div class="report-row"><span>Gange på egen hånd</span><strong>${getSkillProgress(state).multiplication}%</strong></div>
+          <div class="report-row"><span>Fullførte minusrunder</span><strong>${state.subtraction.progress.rounds}</strong></div>
+          <div class="report-row"><span>Minus · beste runde på første forsøk</span><strong>${state.subtraction.progress.best} / ${SUBTRACTION_ROUND_SIZE}</strong></div>
         </section>
 
         <section class="parent-section">
           <h3>Om appen</h3>
-          <p class="parent-text">Mattelek er en matematikkapp for barn i alderen 5–8 år. Den øver på addisjon, tallpar og mønstergjenkjenning med tallhjul, og på gangetabellene fra 1 til 10 i Gangehagen.</p>
+          <p class="parent-text">Mattelek er en matematikkapp for barn i alderen 5–8 år. Den øver på addisjon, tallpar og mønstergjenkjenning med tallhjul, subtraksjon med tall opptil 10 og gangetabellene fra 1 til 10 i Gangehagen.</p>
         </section>
 
         <button class="reset-btn" data-action="reset-progress">Nullstill all fremgang</button>
@@ -694,6 +793,7 @@ function renderScreen() {
     case 'levels':   return renderLevelSelect();
     case 'tables':   return renderMultiplicationTables();
     case 'multiplication': return renderMultiplication();
+    case 'subtraction': return renderSubtraction();
     case 'progress': return renderProgress();
     case 'rewards':  return renderRewards();
     case 'reward-detail': return renderRewardDetail();
@@ -779,6 +879,11 @@ function attachEvents() {
     focusMultiplication(answer);
   });
 
+  document.getElementById('subtraction-form')?.addEventListener('submit', event => {
+    event.preventDefault();
+    checkSubtractionAnswer(document.getElementById('subtraction-answer').value, true);
+  });
+
   // Settings toggles
   app.querySelectorAll('[data-setting]').forEach(el => {
     el.addEventListener('change', () => {
@@ -800,8 +905,54 @@ function focusMultiplication(answer = '') {
   }
 }
 
+function focusSubtraction() {
+  const target = document.getElementById('subtraction-result')
+    ?? document.getElementById('subtraction-question');
+  target?.focus({ preventScroll: true });
+}
+
+function checkSubtractionAnswer(answer, fromInput = false) {
+  const practice = submitSubtractionAnswer(state.subtraction, answer);
+  if (practice === state.subtraction) return;
+  const feedback = practice.round.feedback;
+  if (feedback === 'correct' || feedback === 'wrong') playSound(feedback);
+  setState(updateSubtraction(state, practice));
+  if (feedback === 'correct') {
+    app.querySelector('[data-action="subtraction-next"]')?.focus({ preventScroll: true });
+  } else if (fromInput) {
+    const input = document.getElementById('subtraction-answer');
+    input.value = answer;
+    input.focus({ preventScroll: true });
+    input.select();
+  } else {
+    app.querySelector(`[data-action="subtraction-answer"][data-answer="${answer}"]`)?.focus({ preventScroll: true });
+  }
+}
+
 function handleAction(action, el) {
   switch (action) {
+    case 'subtraction-open':
+    case 'subtraction-start': {
+      const practice = action === 'subtraction-start' || !state.subtraction.round || state.subtraction.round.complete
+        ? startSubtractionRound(state.subtraction, Date.now()) : state.subtraction;
+      setState(updateSubtraction(goToScreen(state, 'subtraction'), practice));
+      focusSubtraction();
+      break;
+    }
+
+    case 'subtraction-answer':
+      checkSubtractionAnswer(Number(el.dataset.answer));
+      break;
+
+    case 'subtraction-next': {
+      const practice = nextSubtractionQuestion(state.subtraction);
+      if (practice === state.subtraction) break;
+      if (practice.round.complete) pendingCelebrate = true;
+      setState(updateSubtraction(state, practice));
+      focusSubtraction();
+      break;
+    }
+
     case 'multiplication-tables':
       setState(goToScreen(state, 'tables'));
       break;

@@ -14,6 +14,8 @@ import {
   REWARD_GROUPS,
   unlockProgressToLevel,
   updateMultiplication,
+  updateSubtraction,
+  goToScreen,
   resetProgress,
 } from '../www/src/engine/game.js';
 
@@ -22,6 +24,10 @@ import {
   getMultiplicationQuestion, submitMultiplicationAnswer,
   requestMultiplicationHint, nextMultiplicationQuestion,
 } from '../www/src/engine/multiplication.js';
+import {
+  SUBTRACTION_ROUND_SIZE, createSubtraction, startSubtractionRound,
+  getSubtractionQuestion, submitSubtractionAnswer, nextSubtractionQuestion,
+} from '../www/src/engine/subtraction.js';
 
 function minimumSolutionSize(puzzle) {
   for (let size = 1; size <= puzzle.pieces.length; size++) {
@@ -111,8 +117,8 @@ describe('game rules', () => {
       levelStars: Object.fromEntries(Array.from({ length: LEVEL_COUNT }, (_, i) => [i, 1])),
     };
 
-    assert.deepEqual(getSkillProgress(level10State), { addition: 13, multiplication: 0 });
-    assert.deepEqual(getSkillProgress(completedState), { addition: 100, multiplication: 0 });
+    assert.deepEqual(getSkillProgress(level10State), { addition: 13, subtraction: 0, multiplication: 0 });
+    assert.deepEqual(getSkillProgress(completedState), { addition: 100, subtraction: 0, multiplication: 0 });
   });
 
   it('does not lower existing progress when unlocking an earlier level', () => {
@@ -176,6 +182,191 @@ describe('game rules', () => {
     }
 
     assert.deepEqual([...solutionSizes].sort((a, b) => a - b), [2, 3, 4]);
+  });
+});
+
+describe('subtraction rules', () => {
+  function solveRound(practice) {
+    while (!practice.round.complete) {
+      practice = submitSubtractionAnswer(practice, String(getSubtractionQuestion(practice).answer));
+      practice = nextSubtractionQuestion(practice);
+    }
+    return practice;
+  }
+
+  it('generates ten varied subtraction questions with exactly one correct choice', () => {
+    let sawZeroAnswer = false;
+    let sawSubtractZero = false;
+    for (let seed = 0; seed < 250; seed++) {
+      const practice = startSubtractionRound(createSubtraction(), seed);
+      assert.equal(practice.round.questions.length, SUBTRACTION_ROUND_SIZE);
+      assert.deepEqual(practice.round.questions.map(q => q.minuend).sort((a, b) => a - b), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+      for (const q of practice.round.questions) {
+        assert.ok(Number.isInteger(q.subtrahend) && q.subtrahend >= 0 && q.subtrahend <= q.minuend);
+        assert.equal(q.answer, q.minuend - q.subtrahend);
+        assert.equal(q.choices.length, 4);
+        assert.equal(new Set(q.choices).size, 4);
+        assert.equal(q.choices.filter(choice => choice === q.answer).length, 1);
+        assert.ok(q.choices.every(choice => Number.isInteger(choice) && choice >= 0 && choice <= 10));
+        if (q.answer === 0) sawZeroAnswer = true;
+        if (q.subtrahend === 0) sawSubtractZero = true;
+      }
+    }
+    assert.equal(sawZeroAnswer, true);
+    assert.equal(sawSubtractZero, true);
+  });
+
+  it('is deterministic for a seed and varies rounds without mutating earlier state', () => {
+    const initial = createSubtraction();
+    const first = startSubtractionRound(initial, 42);
+    assert.deepEqual(first, startSubtractionRound(initial, 42));
+    assert.notDeepEqual(first.round.questions, startSubtractionRound(initial, 43).round.questions);
+    assert.equal(initial.round, null);
+  });
+
+  it('recognizes 6 minus 3 as 3, never the mockup answer 4', () => {
+    const practice = startSubtractionRound(createSubtraction());
+    practice.round.questions[0] = { minuend: 6, subtrahend: 3, answer: 3, choices: [2, 3, 4, 5] };
+    const wrong = submitSubtractionAnswer(practice, 4);
+    assert.equal(wrong.round.feedback, 'wrong');
+    assert.equal(wrong.round.selectedAnswer, 4);
+    assert.equal(wrong.round.results.length, 0);
+    assert.equal(nextSubtractionQuestion(wrong), wrong);
+    const corrected = submitSubtractionAnswer(wrong, 3);
+    assert.equal(corrected.round.feedback, 'correct');
+    assert.equal(corrected.round.selectedAnswer, 3);
+    assert.deepEqual(corrected.round.results, [{ independent: false }]);
+    assert.equal(practice.round.wrongAttempts, 0);
+    const next = nextSubtractionQuestion(corrected);
+    assert.equal(next.round.index, 1);
+    assert.equal(next.round.selectedAnswer, null);
+    assert.equal(next.round.feedback, null);
+    assert.equal(next.round.wrongAttempts, 0);
+    assert.deepEqual(solveRound(next).progress, { rounds: 1, best: 9 });
+  });
+
+  it('accepts typed and numeric zero without treating it as empty input', () => {
+    const practice = startSubtractionRound(createSubtraction());
+    practice.round.questions[0] = { minuend: 2, subtrahend: 2, answer: 0, choices: [0, 1, 2, 3] };
+    for (const input of [0, '0', ' 0 ', '00']) {
+      const result = submitSubtractionAnswer(practice, input);
+      assert.equal(result.round.feedback, 'correct');
+      assert.equal(result.round.selectedAnswer, 0);
+      assert.deepEqual(result.round.results, [{ independent: true }]);
+    }
+  });
+
+  it('validates text without counting empty, decimal, or other invalid input as a mistake', () => {
+    const practice = startSubtractionRound(createSubtraction());
+    for (const input of [null, undefined, '', ' ', NaN, -1, 0.5, '1.5', '1e1', '-2', '+2', 'abc', '1000', false, [0]]) {
+      const result = submitSubtractionAnswer(practice, input);
+      assert.equal(result.round.feedback, 'invalid');
+      assert.equal(result.round.selectedAnswer, null);
+      assert.equal(result.round.wrongAttempts, 0);
+      assert.equal(result.round.results.length, 0);
+      assert.equal(nextSubtractionQuestion(result), result);
+      const corrected = submitSubtractionAnswer(result, String(getSubtractionQuestion(result).answer));
+      assert.deepEqual(corrected.round.results, [{ independent: true }]);
+    }
+  });
+
+  it('counts typed wrong answers outside the choices and accepts a corrected typed answer', () => {
+    const practice = startSubtractionRound(createSubtraction());
+    practice.round.questions[0] = { minuend: 6, subtrahend: 3, answer: 3, choices: [2, 3, 4, 5] };
+    const wrong = submitSubtractionAnswer(practice, '99');
+    assert.equal(wrong.round.feedback, 'wrong');
+    assert.equal(wrong.round.selectedAnswer, 99);
+    assert.equal(wrong.round.wrongAttempts, 1);
+    assert.equal(nextSubtractionQuestion(wrong), wrong);
+    const invalid = submitSubtractionAnswer(wrong, '');
+    assert.equal(invalid.round.wrongAttempts, 1);
+    const corrected = submitSubtractionAnswer(invalid, ' 3 ');
+    assert.equal(corrected.round.feedback, 'correct');
+    assert.equal(corrected.round.selectedAnswer, 3);
+    assert.deepEqual(corrected.round.results, [{ independent: false }]);
+    assert.equal(submitSubtractionAnswer(corrected, '3'), corrected);
+    assert.equal(submitSubtractionAnswer(corrected, 3), corrected);
+    const next = nextSubtractionQuestion(corrected);
+    assert.equal(next.round.selectedAnswer, null);
+    assert.equal(next.round.feedback, null);
+  });
+
+  it('prevents skipping questions and duplicate scores, including after completion', () => {
+    const idle = createSubtraction();
+    assert.equal(getSubtractionQuestion(idle), null);
+    assert.equal(submitSubtractionAnswer(idle, 0), idle);
+    assert.equal(nextSubtractionQuestion(idle), idle);
+    let practice = startSubtractionRound(idle, 42);
+    for (let index = 0; index < SUBTRACTION_ROUND_SIZE; index++) {
+      assert.equal(nextSubtractionQuestion(practice), practice);
+      assert.deepEqual(practice.progress, { rounds: 0, best: 0 });
+      const q = getSubtractionQuestion(practice);
+      practice = submitSubtractionAnswer(practice, q.answer);
+      for (const choice of q.choices) assert.equal(submitSubtractionAnswer(practice, choice), practice);
+      assert.equal(practice.round.results.length, index + 1);
+      practice = nextSubtractionQuestion(practice);
+    }
+    assert.equal(practice.round.complete, true);
+    assert.deepEqual(practice.progress, { rounds: 1, best: 10 });
+    assert.equal(getSubtractionQuestion(practice), null);
+    assert.equal(submitSubtractionAnswer(practice, 0), practice);
+    assert.equal(nextSubtractionQuestion(practice), practice);
+  });
+
+  it('keeps the best first-attempt score when replaying', () => {
+    let practice = solveRound(startSubtractionRound(createSubtraction(), 42));
+    practice = startSubtractionRound(practice, 43);
+    const q = getSubtractionQuestion(practice);
+    practice = submitSubtractionAnswer(practice, q.choices.find(choice => choice !== q.answer));
+    practice = solveRound(practice);
+    assert.deepEqual(practice.progress, { rounds: 2, best: 10 });
+    assert.equal(getSkillProgress({ ...createGame(), subtraction: practice }).subtraction, 100);
+  });
+
+  it('defaults old saves and sanitizes invalid progress', () => {
+    withSavedState({ levelStars: {} }, () => {
+      assert.deepEqual(createGame().subtraction, { progress: { rounds: 0, best: 0 }, round: null });
+    });
+    for (const saved of [null, {}, { rounds: -1, best: 10 }, { rounds: '1', best: 10 }, { rounds: 0, best: 10 }]) {
+      assert.deepEqual(createSubtraction(saved).progress, { rounds: 0, best: 0 });
+    }
+    assert.deepEqual(createSubtraction({ rounds: 2, best: 20 }).progress, { rounds: 2, best: 10 });
+    assert.deepEqual(createSubtraction({ rounds: 1, best: -1 }).progress, { rounds: 1, best: 0 });
+    assert.deepEqual(createSubtraction({ rounds: 1, best: '10' }).progress, { rounds: 1, best: 0 });
+  });
+
+  it('resumes in memory, saves only completed progress, and preserves other activities', () => {
+    withSavedState({
+      currentLevelIndex: 1, currentPuzzleIndex: 3, levelStars: { 0: 3 }, totalStars: 3,
+      settings: { sound: false }, multiplicationProgress: { 6: { rounds: 2, best: 8 } },
+    }, () => {
+      let game = createGame();
+      let practice = startSubtractionRound(game.subtraction, 42);
+      practice = submitSubtractionAnswer(practice, getSubtractionQuestion(practice).answer);
+      game = updateSubtraction(goToScreen(game, 'subtraction'), practice);
+      game = goToScreen(game, 'home');
+      game = goToScreen(game, 'subtraction');
+      assert.equal(game.subtraction, practice);
+      assert.equal(createGame().subtraction.round, null);
+      assert.deepEqual(createGame().subtraction.progress, { rounds: 0, best: 0 });
+      updateSubtraction(game, solveRound(practice));
+      const loaded = createGame();
+      assert.deepEqual(loaded.subtraction.progress, { rounds: 1, best: 10 });
+      assert.equal(loaded.subtraction.round, null);
+      assert.equal(loaded.currentLevelIndex, 1);
+      assert.equal(loaded.currentPuzzleIndex, 3);
+      assert.deepEqual(loaded.levelStars, { 0: 3 });
+      assert.equal(loaded.totalStars, 3);
+      assert.deepEqual(loaded.settings, { sound: false });
+      assert.deepEqual(loaded.multiplication.progress, { 6: { rounds: 2, best: 8 } });
+      updateMultiplication(loaded, startMultiplicationRound(loaded.multiplication, 6));
+      assert.deepEqual(createGame().subtraction.progress, { rounds: 1, best: 10 });
+      resetProgress();
+      const reset = createGame();
+      assert.deepEqual(reset.subtraction.progress, { rounds: 0, best: 0 });
+      assert.deepEqual(reset.multiplication.progress, {});
+      assert.deepEqual(reset.levelStars, {});
+    });
   });
 });
 
