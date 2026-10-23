@@ -44,7 +44,7 @@ html {
   height: 100%;
   font-family: var(--font);
   background: var(--c-bg);
-  touch-action: pan-x pan-y;
+  touch-action: manipulation;
   -webkit-text-size-adjust: 100%;
 }
 
@@ -55,7 +55,7 @@ body {
   align-items: flex-start;
   justify-content: center;
   overscroll-behavior: none;
-  touch-action: pan-x pan-y;
+  touch-action: manipulation;
 }
 
 /* ============================================================
@@ -78,6 +78,7 @@ body {
    ============================================================ */
 .screen {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
   display: flex;
@@ -126,21 +127,23 @@ body {
 .nav-btn:active  { transform: scale(0.92); }
 
 .nav-icon  { font-size: 1.4rem; }
-.nav-label { font-size: 0.62rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; }
+.nav-label { font-size: 0.7rem; font-weight: 800; }
 
 /* ============================================================
    Home Screen
    ============================================================ */
 .screen-home {
   background: linear-gradient(160deg, #EDE9FE 0%, #FFF8F0 55%);
-  padding-bottom: var(--nav-total-h);
+  padding-bottom: 24px;
 }
 
 .home-hero {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 28px 24px 12px;
+  width: min(100%, 1120px);
+  margin: 0 auto;
+  padding: 24px 20px 12px;
 }
 
 .app-logo {
@@ -166,49 +169,50 @@ body {
   margin-top: 3px;
 }
 
-.mascot {
-  font-size: 4.5rem;
-  animation: mascot-sway 2.8s ease-in-out infinite;
-  transform-origin: 50% 90%;
-  user-select: none;
-}
-
-@keyframes mascot-sway {
-  0%, 100% { transform: rotate(-6deg); }
-  50%       { transform: rotate(6deg); }
-}
+.home-fox { width: 64px; height: 76px; object-fit: contain; }
+.home-main { width: min(100%, 1120px); margin: 0 auto; padding: 8px 20px 24px; }
+.home-intro { margin: 12px 0 22px; }
+.home-intro h1 { font-size: clamp(1.4rem, 3vw, 2rem); font-weight: 900; color: var(--c-text); line-height: 1.25; }
+.home-intro p { color: var(--c-muted); font-weight: 600; font-size: 0.95rem; margin-top: 8px; }
 
 .home-menu {
-  display: flex;
-  flex-direction: column;
-  gap: 11px;
-  padding: 8px 20px 24px;
+  display: grid;
+  gap: 14px;
 }
 
 .menu-btn {
-  display: flex;
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
   align-items: center;
-  gap: 14px;
-  padding: 15px 18px;
-  border: none;
+  gap: 10px 16px;
+  padding: 20px;
+  border: 1px solid var(--activity-border);
   border-radius: var(--r-lg);
   cursor: pointer;
   font-family: inherit;
-  color: white;
+  color: var(--activity-ink);
+  background: var(--activity-bg);
   text-align: left;
-  box-shadow: var(--shadow-md);
+  box-shadow: 0 5px 0 var(--activity-border);
   transition: transform 0.12s, box-shadow 0.12s;
 }
 
-.menu-btn:active { transform: scale(0.97); box-shadow: var(--shadow-sm); }
-
-.btn-continue { background: linear-gradient(135deg, #7C3AED, #9333EA); }
-.btn-levels   { background: linear-gradient(135deg, #0284C7, #0EA5E9); }
-.btn-parent   { background: linear-gradient(135deg, #374151, #4B5563); }
-
-.btn-icon    { font-size: 1.7rem; flex-shrink: 0; }
-.btn-label   { font-size: 1.05rem; font-weight: 800; }
-.btn-sub     { font-size: 0.75rem; opacity: 0.85; margin-top: 1px; font-weight: 600; }
+.menu-btn:hover { transform: translateY(-3px); }
+.menu-btn:active { transform: translateY(2px); }
+.btn-continue { --activity-bg: #F5F0FF; --activity-border: #DED1F5; --activity-ink: #5925A4; --activity-accent: #7134CB; }
+.btn-subtraction { --activity-bg: #EFF9FF; --activity-border: #C7E3F2; --activity-ink: #205574; --activity-accent: #286F9C; }
+.btn-multiplication { --activity-bg: #F1F9EE; --activity-border: #CFE4C7; --activity-ink: #2F5E36; --activity-accent: #237541; }
+.activity-symbol { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 17px; background: var(--activity-accent); color: white; font-size: 2.5rem; font-weight: 800; line-height: 1; }
+.activity-copy { min-width: 0; }
+.btn-label { display: block; font-size: 1.3rem; font-weight: 900; }
+.btn-sub { display: block; font-size: 0.9rem; line-height: 1.55; margin-top: 6px; font-weight: 600; }
+.activity-status { display: block; font-size: 0.75rem; font-weight: 800; margin-top: 12px; }
+.activity-cta { grid-column: 2; display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 0.95rem; font-weight: 900; border-top: 1px solid var(--activity-border); padding-top: 12px; }
+.home-shortcuts { display: grid; gap: 10px; margin-top: 28px; }
+.home-shortcuts button { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 12px 16px; background: #FFFFFFB3; color: #4B4560; border: 1px solid #E3DEEB; border-radius: 16px; font: 800 0.9rem var(--font); text-align: left; cursor: pointer; }
+.home-shortcuts button span:last-child { margin-left: auto; }
+.home-shortcuts button:hover { background: white; }
+.home-note { text-align: center; color: var(--c-muted); font-size: 0.85rem; line-height: 1.6; margin-top: 28px; }
 
 /* ============================================================
    Sub-screen Header
@@ -232,8 +236,8 @@ body {
 }
 
 .back-btn {
-  width: 38px;
-  height: 38px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   border: 2px solid var(--c-border);
   background: white;
@@ -321,10 +325,11 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 12px;
   padding: 10px 16px 8px;
   min-height: 0;
+  overflow-y: auto;
 }
 
 .instruction {
@@ -342,14 +347,17 @@ body {
 
 .wheel-container {
   display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-block: auto;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
 }
 
 .wheel-svg {
-  width: min(72vmin, calc(100dvh - 340px), 300px);
-  height: min(72vmin, calc(100dvh - 340px), 300px);
+  width: min(72vw, 300px);
+  height: min(72vw, 300px);
   max-width: calc(100vw - 40px);
   filter: drop-shadow(0 4px 14px rgba(0,0,0,0.13));
   cursor: default;
@@ -410,6 +418,10 @@ body {
 .feedback-wrong        { background: #FEE2E2; color: #7F1D1D; }
 .feedback-hint         { background: #FEF3C7; color: #78350F; }
 .feedback-empty        { background: transparent; }
+.addition-feedback { width: 100%; }
+.selection-summary { color: var(--c-primary-dark); font-size: 0.9rem; font-weight: 800; text-align: center; min-height: 1.5em; }
+.level-name small { display: block; font-size: 0.75rem; color: var(--c-muted); font-weight: 700; }
+.action-btn:disabled { opacity: 0.45; cursor: default; box-shadow: none; transform: none; }
 .feedback-emoji   { font-size: 1.3rem; }
 
 /* Stars earned strip */
@@ -471,7 +483,7 @@ body {
    ============================================================ */
 .screen-levels {
   background: var(--c-bg);
-  padding-bottom: var(--nav-total-h);
+  padding-bottom: 24px;
 }
 
 .level-grid {
@@ -508,7 +520,7 @@ body {
    ============================================================ */
 .screen-progress {
   background: var(--c-bg);
-  padding-bottom: var(--nav-total-h);
+  padding-bottom: 24px;
   gap: 12px;
   padding-top: 4px;
 }
@@ -527,7 +539,7 @@ body {
   background: linear-gradient(135deg, #F59E0B, #FBBF24);
   border-radius: var(--r-lg);
   padding: 14px;
-  color: white;
+  color: #573507;
   box-shadow: var(--shadow-md);
 }
 
@@ -577,7 +589,10 @@ body {
 
 .skill-emoji { font-size: 1.1rem; flex-shrink: 0; width: 26px; text-align: center; }
 .skill-info  { flex: 1; min-width: 0; }
-.skill-label { font-size: 0.82rem; font-weight: 700; margin-bottom: 4px; }
+.skill-label { font-size: 0.95rem; font-weight: 900; margin-bottom: 4px; }
+.skill-description { color: var(--c-muted); font-size: 0.78rem; line-height: 1.5; margin-bottom: 10px; }
+.skill-play { min-height: 44px; padding: 8px 12px; border: 1px solid var(--c-border); border-radius: 12px; background: white; font: 800 0.85rem var(--font); color: var(--c-primary-dark); cursor: pointer; }
+.skill-play:hover { background: var(--c-primary-soft); }
 
 .skill-bar-track {
   height: 7px;
@@ -590,7 +605,7 @@ body {
   height: 100%;
   border-radius: var(--r-full);
   transition: width 0.7s ease-out 0.1s;
-  min-width: 2px;
+  min-width: 0;
 }
 
 .skill-pct { font-size: 0.77rem; font-weight: 700; color: var(--c-muted); flex-shrink: 0; }
@@ -994,34 +1009,32 @@ body {
   }
 
   .home-hero {
-    width: min(100%, 1120px);
-    padding: 52px 40px 20px;
+    padding: 40px 40px 12px;
   }
 
-  .app-logo-icon { font-size: 4.5rem; }
-  .app-title { font-size: 3.3rem; }
-  .app-subtitle { font-size: 1.1rem; }
-  .mascot { font-size: 6.5rem; }
+  .app-logo-icon { font-size: 3.5rem; }
+  .app-title { font-size: 2.6rem; }
+  .app-subtitle { font-size: 0.95rem; }
+  .home-fox { width: 90px; height: 108px; }
+  .home-main { padding: 8px 40px 32px; }
+  .home-intro { margin: 16px 0 28px; }
 
   .home-menu {
-    width: min(100%, 1120px);
-    display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 18px;
-    padding: 16px 40px 40px;
   }
 
   .menu-btn {
-    min-height: 126px;
-    align-items: flex-start;
+    display: flex;
+    align-items: stretch;
     flex-direction: column;
-    justify-content: center;
+    justify-content: flex-start;
+    gap: 18px;
     padding: 22px;
   }
-
-  .btn-icon { font-size: 2rem; }
-  .btn-label { font-size: 1.25rem; }
-  .btn-sub { font-size: 0.88rem; }
+  .activity-copy { flex: 1; }
+  .activity-cta { margin-top: 4px; }
+  .home-shortcuts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
   .play-header {
     padding: 14px max(24px, calc((100vw - 1200px) / 2 + 40px)) 12px;
@@ -1260,7 +1273,6 @@ body {
 /* ============================================================
    Gangehagen — times tables, written answers, and a growing garden
    ============================================================ */
-.btn-multiplication { background: linear-gradient(135deg, #15803D, #0F766E); }
 
 .screen-tables,
 .screen-multiplication { background: linear-gradient(155deg, #F0FDF4, #FFF9ED 80%); }
@@ -1377,7 +1389,6 @@ body {
 }
 
 @media (min-width: 768px) {
-  .home-menu { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .times-table-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 16px; }
   .tables-main { padding-top: 32px; }
   .times-table-card { padding: 20px 8px; }
@@ -1405,23 +1416,12 @@ body {
 }
 
 /* Minus — sky, a friendly fox, and large answer tiles. */
-.btn-subtraction { background: linear-gradient(135deg, #237CA6, #2969A1); }
 .screen-subtraction { background: linear-gradient(150deg, #F1FAFF, #FFFFFF 60%, #EDF9FF); color: #153352; }
-.subtraction-header { display: flex; justify-content: space-between; align-items: center; width: min(100%, 680px); margin: 0 auto; padding: 14px 24px 10px; flex-shrink: 0; }
-.subtraction-brand { display: flex; align-items: center; gap: 9px; }
-.subtraction-brand img { object-fit: contain; }
-.subtraction-title { font-size: 1.9rem; font-weight: 900; line-height: 1.1; letter-spacing: -0.04em; }
-.subtraction-brand p { font-size: 0.85rem; font-weight: 700; color: #657E9B; margin-top: 3px; }
-.subtraction-menu { position: relative; z-index: 5; }
-.subtraction-menu summary { display: grid; place-items: center; width: 46px; height: 46px; border-radius: 50%; background: #DEF1FE; cursor: pointer; list-style: none; font-size: 1.65rem; }
-.subtraction-menu summary::-webkit-details-marker { display: none; }
-.subtraction-menu nav { position: absolute; right: 0; top: 54px; width: 210px; display: grid; padding: 8px; border: 1px solid #D3E8F5; border-radius: 18px; background: #FFF; box-shadow: 0 8px 24px #1738561A; }
-.subtraction-menu button { font: 800 0.95rem var(--font); text-align: left; padding: 13px 10px; border: 0; border-radius: 10px; color: #153352; background: none; cursor: pointer; }
-.subtraction-menu button:hover { background: #EAF6FE; }
+.subtraction-header h2, .subtraction-header .garden-counter { color: #205574; }
 .subtraction-main { position: relative; z-index: 1; width: min(100%, 640px); margin: 0 auto; padding: 8px 18px 0; }
 .subtraction-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
 .subtraction-back { border: 0; border-radius: 999px; padding: 10px 16px; min-height: 44px; background: #DDF1FF; color: #28618B; font: 800 0.95rem var(--font); cursor: pointer; }
-.subtraction-progress { width: 43%; min-width: 138px; text-align: right; }
+.subtraction-progress { width: 100%; text-align: left; }
 .subtraction-progress label { display: block; font-size: 0.85rem; font-weight: 800; margin-bottom: 5px; }
 .subtraction-progress progress { display: block; width: 100%; height: 11px; border: none; border-radius: 999px; background: #DCE9F5; overflow: hidden; appearance: none; }
 .subtraction-progress progress::-webkit-progress-bar { background: #DCE9F5; border-radius: 999px; }
@@ -1476,24 +1476,20 @@ body {
 .subtraction-summary .subtraction-back { margin-top: 16px; }
 .screen-subtraction button:focus-visible,
 #subtraction-answer:focus-visible,
-.subtraction-menu summary:focus-visible { outline: 3px solid #236E9B; outline-offset: 3px; }
+.subtraction-progress:focus-visible { outline: 3px solid #236E9B; outline-offset: 3px; }
 .subtraction-equation:focus, #subtraction-result:focus { outline: none; }
 
 @media (min-width: 768px) {
-  .subtraction-header { padding-top: 22px; }
-  .subtraction-title { font-size: 2.2rem; }
   .subtraction-puzzle { padding-top: 20px; padding-bottom: 24px; }
   .subtraction-choice { min-height: 94px; }
 }
 
 @media (max-width: 480px) {
   .bottom-nav .nav-btn { min-width: 0; }
-  .bottom-nav .nav-label { font-size: 0.53rem; letter-spacing: 0; }
+  .bottom-nav .nav-label { font-size: 0.62rem; }
 }
 
 @media (max-width: 360px) {
-  .subtraction-header { padding: 10px 16px 6px; }
-  .subtraction-title { font-size: 1.65rem; }
   .subtraction-main { padding-inline: 12px; }
   .subtraction-toolbar { gap: 8px; }
   .subtraction-back { padding-inline: 12px; }
@@ -1505,4 +1501,45 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .screen-subtraction.entering { animation: none; }
   .subtraction-choice { transition: none; }
+}
+
+/* Shared interaction and layout details across the three activities. */
+button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible {
+  outline: 3px solid #0369A1;
+  outline-offset: 3px;
+}
+.wheel-slice:focus-visible { outline: none; stroke: #1F2937; stroke-width: 5; }
+.wheel-slice[aria-disabled="true"] { cursor: default; }
+.wheel-slice[aria-disabled="true"]:hover { filter: none; }
+h1[tabindex="-1"]:focus, h2[tabindex="-1"]:focus, .level-name:focus { outline: none; }
+.skill-row { padding-block: 16px; }
+.rewards-intro { width: min(calc(100% - 32px), 1120px); margin: 18px auto 4px; color: var(--c-muted); font-size: 0.9rem; line-height: 1.6; }
+#parent-feedback { color: #9A4D16; font-size: 0.85rem; min-height: 1.5em; }
+.subtraction-main { padding-top: 20px; }
+.addition-feedback .feedback { width: 100%; }
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .play-main { display: flex; padding: 20px; gap: 16px; }
+  .play-main .instruction { width: auto; max-width: 540px; text-align: center; }
+  .addition-feedback { max-width: 540px; }
+  .addition-feedback .feedback { min-height: 46px; }
+  .wheel-svg { width: min(44vw, 360px); height: min(44vw, 360px); }
+  .menu-btn { padding: 18px; }
+}
+
+@media (max-width: 380px) {
+  .app-logo { gap: 8px; }
+  .app-logo-icon { font-size: 2.3rem; }
+  .app-title { font-size: 1.8rem; }
+  .app-subtitle { font-size: 0.7rem; }
+  .home-fox { width: 48px; height: 58px; }
+  .home-main { padding-inline: 14px; }
+  .menu-btn { padding: 16px; gap: 10px 12px; grid-template-columns: 44px minmax(0, 1fr); }
+  .activity-symbol { width: 44px; height: 44px; }
+  .skill-row { gap: 8px; flex-wrap: wrap; }
+  .skill-description { font-size: 0.72rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }

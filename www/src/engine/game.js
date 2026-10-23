@@ -311,19 +311,21 @@ export function getCurrentPuzzle(state) {
 }
 
 export function selectPiece(state, index) {
+  if (isAdditionSolved(state) || !Number.isInteger(index) || index < 0 || index >= getCurrentPuzzle(state).pieces.length) return state;
   const next = new Set(state.selectedPieces);
   if (next.has(index)) { next.delete(index); } else { next.add(index); }
   return { ...state, selectedPieces: next, feedback: null, hintText: null };
 }
 
 export function undoLast(state) {
+  if (isAdditionSolved(state)) return state;
   const arr = [...state.selectedPieces];
   if (!arr.length) return state;
   return { ...state, selectedPieces: new Set(arr.slice(0, -1)), feedback: null, hintText: null };
 }
 
 export function submitAnswer(state) {
-  if (!state.selectedPieces.size) return state;
+  if (isAdditionSolved(state) || !state.selectedPieces.size) return state;
   const puzzle = getCurrentPuzzle(state);
   const sum    = [...state.selectedPieces].reduce((s, i) => s + puzzle.pieces[i], 0);
 
@@ -354,6 +356,7 @@ export function submitAnswer(state) {
 }
 
 export function requestHint(state) {
+  if (isAdditionSolved(state)) return state;
   const puzzle     = getCurrentPuzzle(state);
   const currentSum = [...state.selectedPieces].reduce((s, i) => s + puzzle.pieces[i], 0);
   const remaining  = puzzle.target - currentSum;
@@ -362,11 +365,16 @@ export function requestHint(state) {
     : remaining > 0
     ? `Du har ${currentSum}. Du trenger ${remaining} til!`
     : `Du har for mye! Prøv å fjerne noen.`;
-  return { ...state, hintText, hintUsed: true };
+  return { ...state, feedback: null, hintText, hintUsed: true };
+}
+
+function isAdditionSolved(state) {
+  return state.feedback === 'correct' || state.feedback === 'levelComplete';
 }
 
 // Advance to the next puzzle within the same level.
 export function nextPuzzle(state) {
+  if (state.feedback !== 'correct' || getActivePuzzleIndex(state) >= PUZZLES_PER_LEVEL - 1) return state;
   const nextPuzzleIndex = getActivePuzzleIndex(state) + 1;
   const next = {
     ...state,
@@ -386,7 +394,9 @@ export function nextPuzzle(state) {
 
 // Advance to the first puzzle of the next level.
 export function nextLevel(state) {
+  if (state.feedback !== 'levelComplete') return state;
   const activeLevelIndex = getActiveLevelIndex(state);
+  if (activeLevelIndex === LEVEL_COUNT - 1) return goToScreen(state, 'levels');
   const nextLevelIndex = Math.min(activeLevelIndex + 1, LEVEL_COUNT - 1);
   const next = {
     ...state,
@@ -426,12 +436,7 @@ export function goToLevel(state, index) {
 }
 
 export function goToScreen(state, screen) {
-  return {
-    ...state,
-    screen,
-    feedback:         null,
-    hintText:         null,
-  };
+  return { ...state, screen };
 }
 
 export function unlockProgressToLevel(state, levelNumber) {
@@ -497,9 +502,9 @@ export function resetProgress() {
 }
 
 export function getSkillProgress(state) {
-  const unlockedLevelCount = getUnlockedLevelIndex(state.levelStars) + 1;
+  const completedLevelCount = Array.from({ length: LEVEL_COUNT }, (_, index) => state.levelStars[index]).filter(Boolean).length;
   return {
-    addition: Math.round((unlockedLevelCount / LEVEL_COUNT) * 100),
+    addition: Math.round((completedLevelCount / LEVEL_COUNT) * 100),
     subtraction: getSubtractionProgress(state.subtraction),
     multiplication: getMultiplicationProgress(state.multiplication),
   };

@@ -17,6 +17,7 @@ import {
   updateSubtraction,
   goToScreen,
   resetProgress,
+  selectPiece, undoLast, submitAnswer, requestHint, nextPuzzle, nextLevel,
 } from '../www/src/engine/game.js';
 
 import {
@@ -110,15 +111,55 @@ describe('game rules', () => {
     assert.equal(isLevelUnlocked(next, 10), false);
   });
 
-  it('maps addition progress to the highest unlocked level', () => {
+  it('measures addition progress by completed levels, including the final level', () => {
     const level10State = unlockProgressToLevel(createGame(), 10);
     const completedState = {
       ...createGame(),
       levelStars: Object.fromEntries(Array.from({ length: LEVEL_COUNT }, (_, i) => [i, 1])),
     };
 
-    assert.deepEqual(getSkillProgress(level10State), { addition: 13, subtraction: 0, multiplication: 0 });
+    assert.equal(getSkillProgress(createGame()).addition, 0);
+    assert.deepEqual(getSkillProgress(level10State), { addition: 11, subtraction: 0, multiplication: 0 });
+    assert.equal(getSkillProgress({ ...completedState, levelStars: { ...completedState.levelStars, 79: 0 } }).addition, 99);
     assert.deepEqual(getSkillProgress(completedState), { addition: 100, subtraction: 0, multiplication: 0 });
+  });
+
+  it('keeps addition feedback and hints when visiting other activities', () => {
+    const game = { ...createGame(), selectedPieces: new Set([0, 1]), feedback: 'correct' };
+    const resumed = goToScreen(goToScreen(game, 'tables'), 'play');
+    assert.equal(resumed.feedback, 'correct');
+    assert.deepEqual(resumed.selectedPieces, game.selectedPieces);
+    const hinted = requestHint(createGame());
+    assert.equal(goToScreen(goToScreen(hinted, 'home'), 'play').hintText, hinted.hintText);
+  });
+
+  it('locks solved addition puzzles until the child advances', () => {
+    for (const feedback of ['correct', 'levelComplete']) {
+      const solved = { ...createGame(), feedback, selectedPieces: new Set([0]) };
+      assert.equal(selectPiece(solved, 1), solved);
+      assert.equal(undoLast(solved), solved);
+      assert.equal(submitAnswer(solved), solved);
+      assert.equal(requestHint(solved), solved);
+    }
+  });
+
+  it('only advances solved addition puzzles and finishes the final level at level selection', () => {
+    const game = createGame();
+    assert.equal(nextPuzzle(game), game);
+    assert.equal(nextLevel(game), game);
+    assert.equal(nextPuzzle({ ...game, feedback: 'correct' }).currentPuzzleIndex, 1);
+    assert.equal(nextLevel({ ...game, feedback: 'levelComplete' }).currentLevelIndex, 1);
+    const last = { ...game, currentLevelIndex: 79, currentPuzzleIndex: 9, feedback: 'levelComplete' };
+    assert.equal(nextPuzzle(last), last);
+    assert.equal(nextLevel(last).screen, 'levels');
+  });
+
+  it('shows a requested hint after a wrong answer and ignores invalid piece indices', () => {
+    const game = createGame();
+    for (const index of [-1, 99, NaN, 0.5]) assert.equal(selectPiece(game, index), game);
+    const hinted = requestHint({ ...game, feedback: 'wrong' });
+    assert.equal(hinted.feedback, null);
+    assert.ok(hinted.hintText);
   });
 
   it('does not lower existing progress when unlocking an earlier level', () => {

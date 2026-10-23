@@ -19,23 +19,6 @@ import {
 let state = createGame();
 const app = document.getElementById('app');
 
-function installMobileZoomGuard() {
-  if (!window.matchMedia?.('(pointer: coarse)').matches) return;
-
-  const preventZoomGesture = event => {
-    if (event.touches?.length > 1 || event.type.startsWith('gesture')) {
-      event.preventDefault();
-    }
-  };
-
-  document.addEventListener('touchmove', preventZoomGesture, { passive: false });
-  document.addEventListener('gesturestart', preventZoomGesture, { passive: false });
-  document.addEventListener('gesturechange', preventZoomGesture, { passive: false });
-  document.addEventListener('gestureend', preventZoomGesture, { passive: false });
-}
-
-installMobileZoomGuard();
-
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register(new URL('../sw.js', import.meta.url)).catch(() => {});
@@ -44,10 +27,13 @@ if ('serviceWorker' in navigator) {
 
 // ── Sound ─────────────────────────────────────────────────────────────────────
 
+let audioContext;
+
 function playSound(type) {
   if (!state.settings.sound) return;
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = audioContext ??= new (window.AudioContext || window.webkitAudioContext)();
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
     const schedule = (freq, startOffset, dur, type = 'sine', vol = 0.28) => {
       const o = ctx.createOscillator();
       const g = ctx.createGain();
@@ -61,6 +47,7 @@ function playSound(type) {
       g.gain.exponentialRampToValueAtTime(0.001, t + dur);
       o.start(t);
       o.stop(t + dur);
+      o.onended = () => { o.disconnect(); g.disconnect(); };
     };
 
     if (type === 'select') {
@@ -91,6 +78,7 @@ function slicePath(cx, cy, r, startDeg, endDeg) {
 }
 
 function renderWheel(puzzle, selected, feedback) {
+  const solved = feedback === 'correct' || feedback === 'levelComplete';
   const size = 280;
   const cx = size / 2, cy = size / 2;
   const r  = cx - 6;
@@ -123,7 +111,7 @@ function renderWheel(puzzle, selected, feedback) {
       ? (n <= 5 ? 18 : 15)
       : (n <= 5 ? 22 : 18);
 
-    slices += `<path d="${slicePath(cx, cy, r, startDeg, endDeg)}" fill="${fill}" stroke="white" stroke-width="3" class="wheel-slice${selected.has(i) ? ' sel' : ''}" data-index="${i}" />`;
+    slices += `<path d="${slicePath(cx, cy, r, startDeg, endDeg)}" fill="${fill}" stroke="white" stroke-width="3" class="wheel-slice${selected.has(i) ? ' sel' : ''}" data-index="${i}" role="button" tabindex="${solved ? -1 : 0}" aria-label="Brikke ${i + 1}: ${puzzle.pieces[i]}" aria-pressed="${selected.has(i)}" aria-disabled="${solved}" />`;
     labels += `<text x="${tp.x.toFixed(2)}" y="${tp.y.toFixed(2)}" text-anchor="middle" dominant-baseline="central" fill="${textColor}" font-size="${fontSize}" font-weight="800" font-family="'Nunito',sans-serif" class="wheel-label" data-index="${i}" style="pointer-events:none">${puzzle.pieces[i]}</text>`;
   }
 
@@ -140,7 +128,7 @@ function renderWheel(puzzle, selected, feedback) {
                   : feedback === 'wrong' ? ' wheel-wrong'
                   : '';
 
-  return `<svg class="wheel-svg${animClass}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Tallhjul med ${n} deler">
+  return `<svg class="wheel-svg${animClass}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg" role="group" aria-label="Tallhjul: velg tall som blir ${puzzle.target} til sammen">
     ${slices}${labels}${centerCircle}
   </svg>`;
 }
@@ -148,8 +136,10 @@ function renderWheel(puzzle, selected, feedback) {
 // ── Celebration overlay ───────────────────────────────────────────────────────
 
 function celebrate() {
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const overlay = document.createElement('div');
   overlay.className = 'celebration-overlay';
+  overlay.setAttribute('aria-hidden', 'true');
   const emojis = ['🌟', '⭐', '✨', '🎉', '🎊', '💫'];
   for (let i = 0; i < 14; i++) {
     const span       = document.createElement('span');
@@ -196,7 +186,8 @@ function getRewardEntries() {
 
 function renderBottomNav() {
   const s = state.screen === 'reward-detail' ? 'rewards'
-    : state.screen === 'multiplication' ? 'tables' : state.screen;
+    : state.screen === 'multiplication' ? 'tables'
+    : state.screen === 'levels' ? 'play' : state.screen;
   const btns = [
     { action: 'nav-home',     icon: '🏠', label: 'Hjem',        screen: 'home'     },
     { action: 'nav-play',     icon: '➕', label: 'Addisjon',    screen: 'play'     },
@@ -205,62 +196,77 @@ function renderBottomNav() {
     { action: 'nav-rewards',  icon: '🎁', label: 'Belønninger', screen: 'rewards'  },
     { action: 'nav-progress', icon: '📊', label: 'Fremgang',    screen: 'progress' },
   ];
-  return `<nav class="bottom-nav">
+  return `<nav class="bottom-nav" aria-label="Hovedmeny">
     ${btns.map(b => `
-      <button class="nav-btn${s === b.screen ? ' active' : ''}" data-action="${b.action}">
-        <span class="nav-icon">${b.icon}</span>
+      <button class="nav-btn${s === b.screen ? ' active' : ''}" data-action="${b.action}" ${s === b.screen ? 'aria-current="page"' : ''}>
+        <span class="nav-icon" aria-hidden="true">${b.icon}</span>
         <span class="nav-label">${b.label}</span>
       </button>`).join('')}
   </nav>`;
 }
 
 function renderHome() {
+  const minusRound = state.subtraction.round;
+  const gangeRound = state.multiplication.round;
+  const resumeMinus = minusRound && !minusRound.complete;
+  const resumeGange = gangeRound && !gangeRound.complete;
+  const additionStarted = state.currentPuzzleIndex > 0 || state.selectedPieces.size > 0 || state.totalStars > 0;
   return `
     <div class="screen screen-home">
-      <div class="home-hero">
+      <header class="home-hero">
         <div class="app-logo">
-          <span class="app-logo-icon">🎡</span>
+          <span class="app-logo-icon" aria-hidden="true">🎡</span>
           <div>
             <div class="app-title">Mattelek</div>
-            <div class="app-subtitle">Matte er gøy å lære!</div>
+            <div class="app-subtitle">Små oppgaver. Store oppdagelser.</div>
           </div>
         </div>
-        <span class="mascot">🦊</span>
+        <img class="home-fox" src="img/minus-fox.svg" alt="" width="112" height="134" />
+      </header>
+      <main class="home-main">
+      <div class="home-intro">
+        <h1>Hva vil du leke med i dag?</h1>
+        <p>Velg en aktivitet og øv i ditt eget tempo.</p>
       </div>
-
-      <nav class="home-menu">
+      <nav class="home-menu" aria-label="Velg aktivitet">
         <button class="menu-btn btn-continue" data-action="continue">
-          <span class="btn-icon">▶️</span>
-          <div>
-            <div class="btn-label">Addisjon</div>
-            <div class="btn-sub">Fortsett på nivå ${state.currentLevelIndex + 1}</div>
-          </div>
+          <span class="activity-symbol" aria-hidden="true">+</span>
+          <span class="activity-copy"><span class="btn-label">Addisjon</span>
+            <span class="btn-sub">Finn tall som passer sammen i tallhjulet.</span>
+            <span class="activity-status">Nivå ${state.currentLevelIndex + 1} · oppgave ${state.currentPuzzleIndex + 1} av 10</span>
+          </span>
+          <span class="activity-cta">${additionStarted ? 'Fortsett' : 'Spill tallhjulet'} <span aria-hidden="true">→</span></span>
         </button>
         <button class="menu-btn btn-subtraction" data-action="subtraction-open">
-          <span class="btn-icon" aria-hidden="true">➖</span>
-          <div>
-            <div class="btn-label">Minus</div>
-            <div class="btn-sub">${state.subtraction.round && !state.subtraction.round.complete ? 'Fortsett med minusoppgavene' : 'Trekk fra med tall opptil 10'}</div>
-          </div>
+          <span class="activity-symbol" aria-hidden="true">−</span>
+          <span class="activity-copy"><span class="btn-label">Minus</span>
+            <span class="btn-sub">Trekk fra og finn svaret sammen med reven.</span>
+            <span class="activity-status">${resumeMinus ? `${minusRound.results.length} av 10 løst` : 'Tall opptil 10 · 10 oppgaver'}</span>
+          </span>
+          <span class="activity-cta">${resumeMinus ? 'Fortsett' : 'Spill med reven'} <span aria-hidden="true">→</span></span>
         </button>
-        <button class="menu-btn btn-multiplication" data-action="multiplication-tables">
-          <span class="btn-icon">🌻</span>
-          <div>
-            <div class="btn-label">Gangehagen</div>
-            <div class="btn-sub">Øv på 1-gangen til 10-gangen</div>
-          </div>
-        </button>
-        <button class="menu-btn btn-levels" data-action="levels">
-          <span class="btn-icon">📚</span>
-          <div class="btn-label">Velg addisjonsnivå</div>
-        </button>
-        <button class="menu-btn btn-parent" data-action="parent">
-          <span class="btn-icon">👨‍👩‍👧</span>
-          <div class="btn-label">Foreldreområde</div>
+        <button class="menu-btn btn-multiplication" data-action="${resumeGange ? 'multiplication-resume' : 'multiplication-tables'}">
+          <span class="activity-symbol" aria-hidden="true">×</span>
+          <span class="activity-copy"><span class="btn-label">Gangehagen</span>
+            <span class="btn-sub">Øv på gangetabellene og dyrk fine blomster.</span>
+            <span class="activity-status">${resumeGange ? `${gangeRound.table}-gangen · ${gangeRound.results.length} av 10 løst` : '1–10-gangen · 10 oppgaver'}</span>
+          </span>
+          <span class="activity-cta">${resumeGange ? 'Fortsett' : 'Velg gangetabell'} <span aria-hidden="true">→</span></span>
         </button>
       </nav>
+      <nav class="home-shortcuts" aria-label="Flere valg">
+        <button data-action="levels"><span aria-hidden="true">📚</span> Velg addisjonsnivå <span aria-hidden="true">→</span></button>
+        <button data-action="parent"><span aria-hidden="true">⚙️</span> Foreldreområde <span aria-hidden="true">→</span></button>
+      </nav>
+      <p class="home-note">Her er det lov å prøve igjen. Vi lærer litt for hver gang.</p>
+      </main>
     </div>
     ${renderBottomNav()}`;
+}
+
+function renderSelectedSum(puzzle) {
+  const numbers = [...state.selectedPieces].map(index => puzzle.pieces[index]);
+  return numbers.length ? `${numbers.join(' + ')} = ${numbers.reduce((sum, number) => sum + number, 0)}` : 'Trykk på tallene du vil legge sammen.';
 }
 
 function renderPlay() {
@@ -277,7 +283,7 @@ function renderPlay() {
   </span>`;
 
   // 10 progress dots for puzzles within the current level.
-  const dotsHtml = `<div class="progress-dots">
+  const dotsHtml = `<div class="progress-dots" role="img" aria-label="${activePuzzleIndex + (isCorrect ? 1 : 0)} av ${PUZZLES_PER_LEVEL} oppgaver løst">
     ${Array.from({ length: PUZZLES_PER_LEVEL }, (_, i) => {
       const done    = i < activePuzzleIndex || (isCorrect && i === activePuzzleIndex);
       const current = !done && i === activePuzzleIndex;
@@ -306,7 +312,7 @@ function renderPlay() {
   } else if (state.feedback === 'wrong') {
     feedbackHtml = `<div class="feedback feedback-wrong">
       <span class="feedback-emoji">💭</span>
-      <span>Prøv en annen brikke!</span>
+      <span>Ikke helt ennå. Velg andre tall, eller trykk på Tips.</span>
     </div>`;
   } else if (state.hintText) {
     feedbackHtml = `<div class="feedback feedback-hint">
@@ -318,23 +324,23 @@ function renderPlay() {
   }
 
   const actionHtml = state.feedback === 'levelComplete'
-    ? `<button class="action-btn btn-next" data-action="next-level">Neste nivå →</button>`
+    ? `<button class="action-btn btn-next" data-action="next-level">${levelNum === LEVEL_COUNT ? 'Alle nivåene er løst! Velg nivå' : 'Neste nivå'} →</button>`
     : state.feedback === 'correct'
-    ? `<button class="action-btn btn-next" data-action="next-puzzle">Neste →</button>`
+    ? `<button class="action-btn btn-next" data-action="next-puzzle">Neste oppgave →</button>`
     : `<button class="action-btn btn-hint"  data-action="hint">💡 Tips</button>
-       <button class="action-btn btn-undo"  data-action="undo">↩ Angre</button>
-       <button class="action-btn btn-check" data-action="check">✓ Sjekk</button>`;
+       <button class="action-btn btn-undo"  data-action="undo" ${state.selectedPieces.size ? '' : 'disabled'}>↩ Angre</button>
+       <button class="action-btn btn-check" data-action="check" ${state.selectedPieces.size ? '' : 'disabled'}>Sjekk svar</button>`;
 
   return `
     <div class="screen screen-play">
       <header class="play-header">
         <div class="play-header-top">
-          <button class="back-btn" data-action="home">←</button>
+          <button class="back-btn" data-action="home" aria-label="Til hjem">←</button>
           <div class="level-info">
-            <span class="level-name">Nivå ${levelNum}</span>
+            <span class="level-name">Addisjon <small>Nivå ${levelNum}</small></span>
             ${starsHtml}
           </div>
-          <span class="puzzle-counter">${puzzleNum} / ${PUZZLES_PER_LEVEL}</span>
+          <span class="puzzle-counter">Oppgave ${puzzleNum} av ${PUZZLES_PER_LEVEL}</span>
         </div>
         ${dotsHtml}
       </header>
@@ -343,8 +349,9 @@ function renderPlay() {
         <p class="instruction">${instruction}</p>
         <div class="wheel-container">
           ${renderWheel(puzzle, state.selectedPieces, state.feedback)}
+          <p class="selection-summary" aria-live="polite">${renderSelectedSum(puzzle)}</p>
         </div>
-        ${feedbackHtml}
+        <div class="addition-feedback" role="status">${feedbackHtml}</div>
       </main>
 
       <footer class="action-bar">${actionHtml}</footer>
@@ -355,8 +362,8 @@ function renderLevelSelect() {
   return `
     <div class="screen screen-levels">
       <header class="sub-header">
-        <button class="back-btn" data-action="home">←</button>
-        <h2>Velg nivå</h2>
+        <button class="back-btn" data-action="home" aria-label="Til hjem">←</button>
+        <h2>Addisjon · velg nivå</h2>
         <span class="puzzle-counter" style="margin-left:auto">${Object.keys(state.levelStars).length} / ${LEVEL_COUNT}</span>
       </header>
       <div class="level-grid">
@@ -397,12 +404,13 @@ function renderMultiplicationTables() {
         <div class="times-table-grid" aria-label="Velg gangetabell">
           ${TIMES_TABLES.map(table => {
             const progress = practice.progress[table];
+            const resume = resumable && practice.round.table === table;
             return `<button class="times-table-card${progress?.best === 10 ? ' mastered' : ''}"
-                data-action="multiplication-start" data-table="${table}">
+                data-action="${resume ? 'multiplication-resume' : 'multiplication-start'}" data-table="${table}">
               <span class="table-flower" aria-hidden="true">${progress?.best === 10 ? '🌻' : progress ? '🌷' : '🌱'}</span>
               <span class="table-title">${table}-gangen</span>
               <span class="table-example">${table} × 3 = ${table * 3}</span>
-              <span class="table-record">${progress ? `Beste: ${progress.best} av 10 uten hjelp` : 'Klar til å så!'}</span>
+              <span class="table-record">${resume ? 'Fortsett runden →' : progress ? `Beste: ${progress.best} av 10 på egen hånd` : 'Klar til å så!'}</span>
             </button>`;
           }).join('')}
         </div>
@@ -478,12 +486,12 @@ function renderMultiplication() {
         <button class="garden-primary" data-action="multiplication-start" data-table="${round.table}">Øv på ${round.table}-gangen igjen</button>
         <button class="garden-secondary" data-action="multiplication-tables">Velg en annen gangetabell</button>
       </section>` : `<section class="multiplication-card">
-        <p class="garden-eyebrow">GANGESTYKKE ${round.index + 1} AV 10</p>
+        <p class="garden-eyebrow">OPPGAVE ${round.index + 1} AV 10</p>
         <div class="multiplication-equation" aria-label="${question.table} ganger ${question.factor}">
           ${question.table} <span>×</span> ${question.factor} <span>=</span> <strong>${correct ? question.answer : '?'}</strong>
         </div>
         <p class="multiplication-feedback ${correct ? 'is-correct' : ''}" id="multiplication-feedback" role="status">${feedback}</p>
-        ${correct ? `<button class="garden-primary" data-action="multiplication-next">${round.results.length === 10 ? 'Se hagen din' : 'Neste gangestykke'} →</button>` : `
+        ${correct ? `<button class="garden-primary" data-action="multiplication-next">${round.results.length === 10 ? 'Se resultatet' : 'Neste oppgave'} →</button>` : `
           <form id="multiplication-form" novalidate>
             <label for="multiplication-answer">Svaret ditt</label>
             <div class="multiplication-answer-row">
@@ -509,23 +517,13 @@ function renderSubtraction() {
   const correct = round.feedback === 'correct';
   const independentCount = round.results.filter(result => result.independent).length;
   return `<div class="screen screen-subtraction">
-    <header class="subtraction-header">
-      <div class="subtraction-brand">
-        <img src="img/minus-fox.svg" alt="" width="54" height="64" />
-        <div><div class="subtraction-title">Mattelek</div><p>Matte for barn</p></div>
-      </div>
-      <details class="subtraction-menu">
-        <summary aria-label="Åpne meny"><span aria-hidden="true">☰</span></summary>
-        <nav aria-label="Meny">
-          <button data-action="home">🏠 Hjem</button>
-          <button data-action="nav-progress">📊 Fremgang</button>
-          <button data-action="parent">👨‍👩‍👧 Foreldreområde</button>
-        </nav>
-      </details>
+    <header class="sub-header subtraction-header">
+      <button class="back-btn" data-action="home" aria-label="Til hjem">←</button>
+      <h2>Minus</h2>
+      <span class="garden-counter">${round.results.length} av 10 løst</span>
     </header>
     <main class="subtraction-main">
       <div class="subtraction-toolbar">
-        <button class="subtraction-back" data-action="home">← Tilbake</button>
         <div class="subtraction-progress">
           <label for="subtraction-progress">${round.complete ? 'Alle oppgavene er løst!' : `Oppgave ${round.index + 1} av ${SUBTRACTION_ROUND_SIZE}`}</label>
           <progress id="subtraction-progress" value="${round.results.length}" max="${SUBTRACTION_ROUND_SIZE}">${round.results.length} av ${SUBTRACTION_ROUND_SIZE} løst</progress>
@@ -543,8 +541,8 @@ function renderSubtraction() {
           <span class="subtraction-cloud cloud-left" aria-hidden="true"></span>
           <span class="subtraction-cloud cloud-right" aria-hidden="true"></span>
           <h1 id="subtraction-heading">Minus</h1>
-          <h2 class="subtraction-equation" id="subtraction-question" tabindex="-1" aria-label="${question.minuend} minus ${question.subtrahend}. Hva blir svaret?">
-            ${question.minuend} − ${question.subtrahend} = ?
+          <h2 class="subtraction-equation" id="subtraction-question" tabindex="-1" aria-label="${question.minuend} minus ${question.subtrahend}. ${correct ? `Svaret er ${question.answer}.` : 'Hva blir svaret?'}">
+            ${question.minuend} − ${question.subtrahend} = ${correct ? question.answer : '?'}
           </h2>
           <p>Hva blir svaret?</p>
           <img class="subtraction-fox" src="img/minus-fox.svg" alt="" width="112" height="134" />
@@ -589,19 +587,21 @@ function renderProgress() {
   const unlockedLevel = getUnlockedLevelIndex(state.levelStars) + 1;
 
   const skillRows = [
-    { key: 'addition',  label: 'Addisjon',    emoji: '➕', color: '#7C3AED' },
-    { key: 'subtraction', label: 'Minus · på første forsøk', emoji: '➖', color: '#2782B1' },
-    { key: 'multiplication', label: 'Gange · på egen hånd', emoji: '🌻', color: '#15803D' },
+    { key: 'addition', label: 'Addisjon', emoji: '➕', color: '#7C3AED', description: `${Object.keys(state.levelStars).length} av ${LEVEL_COUNT} nivåer fullført`, action: 'continue' },
+    { key: 'subtraction', label: 'Minus', emoji: '➖', color: '#2782B1', description: `Beste runde: ${state.subtraction.progress.best} av 10 på første forsøk`, action: 'subtraction-open' },
+    { key: 'multiplication', label: 'Gangehagen', emoji: '🌻', color: '#15803D', description: 'Beste resultater i alle tabellene, på første forsøk uten hjelp', action: 'multiplication-tables' },
   ].map(r => `
     <div class="skill-row">
-      <span class="skill-emoji">${r.emoji}</span>
+      <span class="skill-emoji" aria-hidden="true">${r.emoji}</span>
       <div class="skill-info">
         <div class="skill-label">${r.label}</div>
-        <div class="skill-bar-track">
+        <div class="skill-description">${r.description}</div>
+        <div class="skill-bar-track" role="progressbar" aria-label="${r.label}" aria-valuenow="${skill[r.key]}" aria-valuemin="0" aria-valuemax="100">
           <div class="skill-bar-fill" style="width:${skill[r.key]}%;background:${r.color}"></div>
         </div>
       </div>
       <span class="skill-pct">${skill[r.key]}%</span>
+      <button class="skill-play" data-action="${r.action}" aria-label="Øv på ${r.label}">Øv <span aria-hidden="true">→</span></button>
     </div>`).join('');
 
   return `
@@ -613,7 +613,7 @@ function renderProgress() {
           <span class="tsbadge-icon">⭐</span>
           <div>
             <div class="tsbadge-num">${state.totalStars}</div>
-            <div class="tsbadge-label">Stjerner totalt</div>
+            <div class="tsbadge-label">Stjerner i addisjon</div>
           </div>
         </div>
         <div class="level-badge">
@@ -623,11 +623,11 @@ function renderProgress() {
       </div>
 
       <div class="skill-section">
-        <div class="section-title">Ferdigheter</div>
+        <div class="section-title">Dette har du øvd på</div>
         ${skillRows}
       </div>
 
-      <div class="bear-mascot">🐻 Kjempebra! Du gjør det bra!</div>
+      <div class="bear-mascot">🌱 Litt øving hver gang. Du kan alltid prøve igjen!</div>
     </div>
     ${renderBottomNav()}`;
 }
@@ -669,6 +669,8 @@ function renderRewards() {
         <div class="stars-header">${unlockedCount} / ${totalRewards}</div>
       </header>
 
+      <p class="rewards-intro">Fullfør nivåer i addisjon for å samle nye venner og overraskelser.</p>
+
       ${nextReward ? `<div class="next-reward-banner">
         <span class="next-reward-label">Neste: </span>
         <span class="next-reward-emoji">${nextReward.emoji}</span>
@@ -700,7 +702,7 @@ function renderRewardDetail() {
   return `
     <div class="screen screen-reward-detail">
       <header class="sub-header">
-        <button class="back-btn" data-action="nav-rewards">←</button>
+        <button class="back-btn" data-action="nav-rewards" aria-label="Til belønninger">←</button>
         <h2>${reward.name}</h2>
       </header>
 
@@ -721,17 +723,18 @@ function renderParent() {
     return `
       <div class="screen screen-parent">
         <header class="sub-header">
-          <button class="back-btn" data-action="home">←</button>
+          <button class="back-btn" data-action="home" aria-label="Til hjem">←</button>
           <h2>Foreldreområde</h2>
         </header>
         <div class="parent-gate">
           <span class="gate-emoji">🔐</span>
           <p class="gate-text">Er du en voksen? Løs regnestykket under for å åpne dette området.</p>
-          <div class="gate-puzzle">
-            <span class="gate-question">Hva er <strong>12 × 8</strong>?</span>
-            <input type="number" id="parent-code" class="gate-input" placeholder="Skriv svar her" min="0" max="999" />
-            <button class="gate-btn" data-action="unlock-parent">Åpne →</button>
-          </div>
+          <form class="gate-puzzle" id="parent-form" novalidate>
+            <label for="parent-code" class="gate-question">Hva er <strong>12 × 8</strong>?</label>
+            <input type="text" inputmode="numeric" id="parent-code" class="gate-input" placeholder="Skriv svar her" maxlength="3" autocomplete="off" aria-describedby="parent-feedback" />
+            <p id="parent-feedback" role="status"></p>
+            <button class="gate-btn" type="submit">Åpne →</button>
+          </form>
         </div>
       </div>
       ${renderBottomNav()}`;
@@ -740,7 +743,7 @@ function renderParent() {
   return `
     <div class="screen screen-parent">
       <header class="sub-header">
-        <button class="back-btn" data-action="home">←</button>
+        <button class="back-btn" data-action="home" aria-label="Til hjem">←</button>
         <h2>Foreldreområde</h2>
       </header>
       <div class="parent-content">
@@ -753,7 +756,7 @@ function renderParent() {
         </section>
 
         <section class="parent-section">
-          <h3>Lås opp nivå</h3>
+          <h3>Lås opp addisjonsnivå</h3>
           <div class="unlock-level-row">
             <select id="unlock-level-select" class="unlock-level-select" aria-label="Velg nivå">
               ${unlockLevelOptions}
@@ -805,10 +808,23 @@ function renderScreen() {
 let pendingCelebrate = false;
 
 function render(isScreenTransition = false) {
+  const scrollTop = app.querySelector('.screen')?.scrollTop ?? 0;
+  const focused = document.activeElement;
+  const focusAction = focused?.dataset.action;
+  const focusSetting = focused?.dataset.setting;
   app.innerHTML = renderScreen();
   if (isScreenTransition) {
     const screenEl = app.querySelector('.screen');
     if (screenEl) screenEl.classList.add('entering');
+    const heading = screenEl?.querySelector('h1, h2, .level-name');
+    heading?.setAttribute('tabindex', '-1');
+    heading?.focus({ preventScroll: true });
+  } else {
+    const screenEl = app.querySelector('.screen');
+    if (screenEl) screenEl.scrollTop = scrollTop;
+    const selector = focusSetting ? `[data-setting="${focusSetting}"]`
+      : focusAction ? `[data-action="${focusAction}"]${focused.dataset.rewardFilter ? `[data-reward-filter="${focused.dataset.rewardFilter}"]` : ''}` : null;
+    if (selector) app.querySelector(selector)?.focus({ preventScroll: true });
   }
   attachEvents();
   if (pendingCelebrate) {
@@ -834,8 +850,14 @@ function applyPieceSelection() {
     const sel = state.selectedPieces.has(i);
     path.setAttribute('fill', sel ? c.selected : c.idle);
     path.classList.toggle('sel', sel);
+    path.setAttribute('aria-pressed', String(sel));
     label.setAttribute('fill', sel ? c.textSelected : c.textIdle);
   }
+  const summary = app.querySelector('.selection-summary');
+  if (summary) summary.textContent = renderSelectedSum(puzzle);
+  app.querySelectorAll('[data-action="check"], [data-action="undo"]').forEach(button => {
+    button.disabled = state.selectedPieces.size === 0;
+  });
   // Sync feedback/hint display — clears 'wrong' feedback and hint text when user re-selects.
   if (state.feedback === null) {
     const feedbackEl = app.querySelector('.feedback');
@@ -851,10 +873,16 @@ function attachEvents() {
   // Wheel slice taps — update SVG in-place to avoid layout jump
   app.querySelectorAll('.wheel-slice').forEach(el => {
     el.addEventListener('click', () => {
-      if (state.feedback === 'correct') return;
+      if (state.feedback === 'correct' || state.feedback === 'levelComplete') return;
       playSound('select');
       state = selectPiece(state, Number(el.dataset.index));
       applyPieceSelection();
+    });
+    el.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      }
     });
   });
 
@@ -871,7 +899,6 @@ function attachEvents() {
     const practice = submitMultiplicationAnswer(state.multiplication, answer);
     if (practice.round.feedback === 'correct') {
       playSound('correct');
-      if (practice.round.results.length === 10) pendingCelebrate = true;
     } else if (practice.round.feedback === 'wrong') {
       playSound('wrong');
     }
@@ -882,6 +909,10 @@ function attachEvents() {
   document.getElementById('subtraction-form')?.addEventListener('submit', event => {
     event.preventDefault();
     checkSubtractionAnswer(document.getElementById('subtraction-answer').value, true);
+  });
+  document.getElementById('parent-form')?.addEventListener('submit', event => {
+    event.preventDefault();
+    handleAction('unlock-parent');
   });
 
   // Settings toggles
@@ -970,10 +1001,14 @@ function handleAction(action, el) {
       focusMultiplication();
       break;
 
-    case 'multiplication-next':
-      setState(updateMultiplication(state, nextMultiplicationQuestion(state.multiplication)));
+    case 'multiplication-next': {
+      const practice = nextMultiplicationQuestion(state.multiplication);
+      if (practice === state.multiplication) break;
+      if (practice.round.complete) pendingCelebrate = true;
+      setState(updateMultiplication(state, practice));
       focusMultiplication();
       break;
+    }
 
     case 'multiplication-hint': {
       const answer = document.getElementById('multiplication-answer')?.value ?? '';
@@ -1005,8 +1040,6 @@ function handleAction(action, el) {
       setState({
         ...state,
         rewardFilter: el.dataset.rewardFilter ?? 'all',
-        feedback: null,
-        hintText: null,
       });
       break;
 
@@ -1021,8 +1054,6 @@ function handleAction(action, el) {
         screen: 'reward-detail',
         rewardGroupIndex: groupIndex,
         rewardItemIndex: itemIndex,
-        feedback: null,
-        hintText: null,
       });
       break;
     }
@@ -1057,15 +1088,18 @@ function handleAction(action, el) {
         playSound('wrong');
       }
       setState(result);
+      app.querySelector('[data-action="next-puzzle"], [data-action="next-level"]')?.focus({ preventScroll: true });
       break;
     }
 
     case 'next-puzzle':
       setState(nextPuzzle(state));
+      app.querySelector('.wheel-slice')?.focus({ preventScroll: true });
       break;
 
     case 'next-level':
       setState(nextLevel(state));
+      app.querySelector('.wheel-slice')?.focus({ preventScroll: true });
       break;
 
     case 'unlock-parent': {
@@ -1073,6 +1107,10 @@ function handleAction(action, el) {
       if (input && Number(input.value) === 96) {
         setState(unlockParent(state));
       } else {
+        document.getElementById('parent-feedback').textContent = 'Ikke helt riktig. Prøv igjen.';
+        input?.setAttribute('aria-invalid', 'true');
+        input?.focus();
+        input?.select();
         input?.classList.add('shake');
         setTimeout(() => input?.classList.remove('shake'), 400);
       }
