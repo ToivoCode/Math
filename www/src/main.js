@@ -2,14 +2,14 @@
 import {
   createGame, getCurrentPuzzle, selectPiece, undoLast,
   submitAnswer, requestHint, nextPuzzle, nextLevel, goToLevel, goToScreen,
-  unlockProgressToLevel, updateSetting, updateMultiplication, updateSubtraction, unlockParent, resetProgress, getSkillProgress,
+  unlockProgressToLevel, updateSetting, updateMultiplication, updateSubtraction, updateDivision, unlockParent, resetProgress, getSkillProgress,
   getActiveLevelIndex, getActivePuzzleIndex, getUnlockedLevelIndex, isLevelUnlocked,
   LEVEL_COUNT, PUZZLES_PER_LEVEL, PIECE_COLORS, REWARD_GROUPS,
 } from './engine/game.js';
 import {
-  TIMES_TABLES, MULTIPLICATION_ROUND_SIZE, startMultiplicationRound,
+  TIMES_TABLES, startMultiplicationRound,
   getMultiplicationQuestion, submitMultiplicationAnswer,
-  requestMultiplicationHint, nextMultiplicationQuestion,
+  requestMultiplicationHint, nextMultiplicationQuestion, startMultiplicationReview,
 } from './engine/multiplication.js';
 import {
   SUBTRACTION_ROUND_SIZE, startSubtractionRound, getSubtractionQuestion,
@@ -17,9 +17,24 @@ import {
   SUBTRACTION_LEVEL_COUNT, getSubtractionLevelMax, isSubtractionLevelUnlocked,
   unlockSubtractionToLevel,
 } from './engine/subtraction.js';
+import {
+  DIVISORS, DIVISION_ROUND_SIZE, startDivisionRound, getDivisionQuestion,
+  submitDivisionAnswer, requestDivisionHint, nextDivisionQuestion,
+} from './engine/division.js';
 
 let state = createGame();
 const app = document.getElementById('app');
+let keyboardNavigation = false;
+document.addEventListener('keydown', event => {
+  if (['Tab', 'Enter', ' ', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
+    keyboardNavigation = true;
+    document.documentElement.classList.add('keyboard-navigation');
+  }
+}, true);
+document.addEventListener('pointerdown', () => {
+  keyboardNavigation = false;
+  document.documentElement.classList.remove('keyboard-navigation');
+}, true);
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
@@ -189,6 +204,7 @@ function getRewardEntries() {
 function renderBottomNav() {
   const s = state.screen === 'reward-detail' ? 'rewards'
     : state.screen === 'multiplication' ? 'tables'
+    : state.screen === 'division' ? 'division-tables'
     : state.screen === 'subtraction-levels' ? 'subtraction'
     : state.screen === 'levels' ? 'play' : state.screen;
   const btns = [
@@ -196,13 +212,14 @@ function renderBottomNav() {
     { action: 'nav-play',     icon: '➕', label: 'Addisjon',    screen: 'play'     },
     { action: 'subtraction-open', icon: '➖', label: 'Minus', screen: 'subtraction' },
     { action: 'multiplication-tables', icon: '×', label: 'Gange', screen: 'tables' },
-    { action: 'nav-rewards',  icon: '🎁', label: 'Belønninger', screen: 'rewards'  },
+    { action: 'division-tables', icon: '÷', label: 'Del på', screen: 'division-tables' },
+    { action: 'nav-rewards',  icon: '🎁', label: 'Premier', screen: 'rewards'  },
     { action: 'nav-progress', icon: '📊', label: 'Fremgang',    screen: 'progress' },
   ];
   return `<nav class="bottom-nav" aria-label="Hovedmeny">
     ${btns.map(b => `
       <button class="nav-btn${s === b.screen ? ' active' : ''}" data-action="${b.action}" ${s === b.screen ? 'aria-current="page"' : ''}>
-        <span class="nav-icon${b.screen === 'tables' ? ' nav-multiply' : ''}" aria-hidden="true">${b.icon}</span>
+        <span class="nav-icon${b.screen === 'tables' ? ' nav-multiply' : b.screen === 'division-tables' ? ' nav-divide' : ''}" aria-hidden="true">${b.icon}</span>
         <span class="nav-label">${b.label}</span>
       </button>`).join('')}
   </nav>`;
@@ -213,6 +230,8 @@ function renderHome() {
   const gangeRound = state.multiplication.round;
   const resumeMinus = minusRound && !minusRound.complete;
   const resumeGange = gangeRound && !gangeRound.complete;
+  const divisionRound = state.division.round;
+  const resumeDivision = divisionRound && !divisionRound.complete;
   const additionStarted = state.currentPuzzleIndex > 0 || state.selectedPieces.size > 0 || state.totalStars > 0;
   const minusLevel = resumeMinus ? minusRound.levelIndex : state.subtraction.levels.currentLevelIndex;
   return `
@@ -253,9 +272,17 @@ function renderHome() {
           <span class="activity-symbol" aria-hidden="true">×</span>
           <span class="activity-copy"><span class="btn-label">Gangehagen</span>
             <span class="btn-sub">Øv på gangetabellene og dyrk fine blomster.</span>
-            <span class="activity-status">${resumeGange ? `${gangeRound.table}-gangen · ${gangeRound.results.length} av 10 løst` : '1–10-gangen · 10 oppgaver'}</span>
+            <span class="activity-status">${resumeGange ? `${gangeRound.isReview ? 'Repetisjon · ' : ''}${gangeRound.table}-gangen · ${gangeRound.results.length} av ${gangeRound.factors.length} løst` : '1–10-gangen · 10 oppgaver'}</span>
           </span>
           <span class="activity-cta">${resumeGange ? 'Fortsett' : 'Velg gangetabell'} <span aria-hidden="true">→</span></span>
+        </button>
+        <button class="menu-btn btn-division" data-action="${resumeDivision ? 'division-resume' : 'division-tables'}">
+          <span class="activity-symbol" aria-hidden="true">÷</span>
+          <span class="activity-copy"><span class="btn-label">Deling</span>
+            <span class="btn-sub">Fordel likt og finn ut hvor mye hver får.</span>
+            <span class="activity-status">${resumeDivision ? `Del på ${divisionRound.divisor} · ${divisionRound.results.length} av 10 løst` : 'Del på 1–10 · uten rest'}</span>
+          </span>
+          <span class="activity-cta">${resumeDivision ? 'Fortsett' : 'Velg delestykker'} <span aria-hidden="true">→</span></span>
         </button>
       </nav>
       <nav class="home-shortcuts" aria-label="Flere valg">
@@ -412,7 +439,7 @@ function renderMultiplicationTables() {
           <p>Velg en gangetabell. Løs 10 gangestykker og få hagen til å blomstre!</p>
         </div>
         ${resumable ? `<button class="garden-resume" data-action="multiplication-resume">
-          Fortsett med ${practice.round.table}-gangen · ${practice.round.results.length} av 10 løst →
+          ${practice.round.isReview ? 'Fortsett repetisjonen i' : 'Fortsett med'} ${practice.round.table}-gangen · ${practice.round.results.length} av ${practice.round.factors.length} løst →
         </button>` : ''}
         <div class="times-table-grid" aria-label="Velg gangetabell">
           ${TIMES_TABLES.map(table => {
@@ -434,7 +461,7 @@ function renderMultiplicationTables() {
 }
 
 function renderGarden(round) {
-  return `<div class="multiplication-garden" role="img" aria-label="${round.results.length} av 10 blomster har blomstret">
+  return `<div class="multiplication-garden" role="img" aria-label="${round.results.length} av ${round.factors.length} blomster har blomstret">
     <div class="garden-sky" aria-hidden="true"><span>☁️</span><span>☀️</span></div>
     <div class="garden-plots" aria-hidden="true">
       ${round.factors.map((factor, index) => `
@@ -464,6 +491,8 @@ function renderMultiplication() {
   const question = getMultiplicationQuestion(state.multiplication);
   const correct = round.feedback === 'correct';
   const independentCount = round.results.filter(result => result.independent).length;
+  const roundSize = round.factors.length;
+  const reviewCount = round.results.filter(result => !result.independent).length || Math.min(3, roundSize);
   let feedback = 'Skriv svaret og se hva som spirer!';
   if (correct && question) feedback = `Riktig! ${question.table} × ${question.factor} = ${question.answer}. En ny blomst!`;
   else if (round.feedback === 'wrong') feedback = 'Det var ikke helt riktig. Prøv igjen, eller bruk prikkene som hjelp.';
@@ -473,22 +502,23 @@ function renderMultiplication() {
     <header class="sub-header multiplication-header">
       <button class="back-btn" data-action="multiplication-tables" aria-label="Velg gangetabell">←</button>
       <h2>${round.table}-gangen</h2>
-      <span class="garden-counter">🌼 ${round.results.length} / ${MULTIPLICATION_ROUND_SIZE}</span>
+      <span class="garden-counter">🌼 ${round.results.length} / ${roundSize}</span>
     </header>
     <main class="multiplication-main${round.complete ? ' round-complete' : ''}">
       <section class="garden-panel">
         <div class="garden-heading">
           <span class="garden-eyebrow">GANGEHAGEN</span>
-          <h1>${round.complete ? 'Se så fint det blomstrer!' : 'Dyrk din egen gangehage'}</h1>
-          <p>${round.complete ? `Du har løst alle de 10 stykkene i ${round.table}-gangen.` : 'Hvert riktige svar får en ny blomst til å vokse.'}</p>
+          <h1>${round.isReview ? 'Vi øver en gang til!' : round.complete ? 'Se så fint det blomstrer!' : 'Dyrk din egen gangehage'}</h1>
+          <p>${round.complete ? `Du har løst alle de ${roundSize} stykkene i ${round.table}-gangen.` : round.isReview ? 'Repetisjon hjelper deg å huske. Ta den tiden du trenger.' : 'Hvert riktige svar får en ny blomst til å vokse.'}</p>
         </div>
         ${renderGarden(round)}
       </section>
       ${round.complete ? `<section class="multiplication-card multiplication-summary">
         <span class="summary-bloom" aria-hidden="true">💐</span>
-        <h2 tabindex="-1" id="multiplication-result">Hele hagen blomstrer!</h2>
-        <p><strong>${independentCount} av 10</strong> på første forsøk uten hjelp.</p>
-        <p>${independentCount === 10 ? 'Du kan denne tabellen kjempegodt!' : 'Hver runde gjør deg litt tryggere. Prøv igjen når du vil!'}</p>
+        <h2 tabindex="-1" id="multiplication-result">${round.isReview ? 'Godt repetert!' : 'Hele hagen blomstrer!'}</h2>
+        <p><strong>${independentCount} av ${roundSize}</strong> på første forsøk uten hjelp.</p>
+        <p>${independentCount === roundSize ? 'La oss se om du husker noen av stykkene en gang til.' : 'Vi kan øve en gang til på stykkene som trengte litt hjelp.'}</p>
+        ${round.isReview ? '<p class="review-note">Repetisjon endrer ikke resultatet fra den vanlige runden.</p>' : ''}
         <details class="multiplication-review">
           <summary>Se gangestykkene dine</summary>
           <ul>${[...round.results].sort((a, b) => a.factor - b.factor).map(result => `<li>
@@ -496,15 +526,16 @@ function renderMultiplication() {
             <span>${result.independent ? 'På egen hånd' : 'Med litt øving'}</span>
           </li>`).join('')}</ul>
         </details>
-        <button class="garden-primary" data-action="multiplication-start" data-table="${round.table}">Øv på ${round.table}-gangen igjen</button>
+        <button class="garden-primary" data-action="multiplication-repeat">Repeter ${reviewCount} ${reviewCount === 1 ? 'gangestykke' : 'gangestykker'} →</button>
+        <button class="garden-secondary" data-action="multiplication-start" data-table="${round.table}">Spill hele ${round.table}-gangen igjen</button>
         <button class="garden-secondary" data-action="multiplication-tables">Velg en annen gangetabell</button>
       </section>` : `<section class="multiplication-card">
-        <p class="garden-eyebrow">OPPGAVE ${round.index + 1} AV 10</p>
+        <p class="garden-eyebrow">${round.isReview ? 'REPETISJON' : 'OPPGAVE'} ${round.index + 1} AV ${roundSize}</p>
         <div class="multiplication-equation" aria-label="${question.table} ganger ${question.factor}">
           ${question.table} <span>×</span> ${question.factor} <span>=</span> <strong>${correct ? question.answer : '?'}</strong>
         </div>
         <p class="multiplication-feedback ${correct ? 'is-correct' : ''}" id="multiplication-feedback" role="status">${feedback}</p>
-        ${correct ? `<button class="garden-primary" data-action="multiplication-next">${round.results.length === 10 ? 'Se resultatet' : 'Neste oppgave'} →</button>` : `
+        ${correct ? `<button class="garden-primary" data-action="multiplication-next">${round.results.length === roundSize ? 'Se resultatet' : 'Neste oppgave'} →</button>` : `
           <form id="multiplication-form" novalidate>
             <label for="multiplication-answer">Svaret ditt</label>
             <div class="multiplication-answer-row">
@@ -515,6 +546,80 @@ function renderMultiplication() {
           </form>
           <button class="garden-secondary" data-action="multiplication-hint" aria-expanded="${round.hintUsed}" aria-controls="multiplication-hint">💡 Vis meg med prikker</button>
           ${round.hintUsed ? renderMultiplicationHint(question) : ''}
+        `}
+      </section>`}
+    </main>
+  </div>`;
+}
+
+// ── Deling ────────────────────────────────────────────────────────────────────
+
+function renderDivisionTables() {
+  const practice = state.division;
+  const round = practice.round;
+  const resumable = round && !round.complete;
+  return `<div class="screen screen-tables screen-division">
+    <header class="sub-header"><button class="back-btn" data-action="home" aria-label="Til hjem">←</button><h2>Deling</h2></header>
+    <main class="tables-main">
+      <div class="tables-intro"><span class="garden-mascot" aria-hidden="true">🧺</span>
+        <h1>La oss dele likt!</h1><p>Velg tallet du vil dele på. Løs 10 delestykker, helt uten rest.</p>
+      </div>
+      ${resumable ? `<button class="garden-resume" data-action="division-resume">Fortsett med del på ${round.divisor} · ${round.results.length} av 10 løst →</button>` : ''}
+      <div class="times-table-grid" aria-label="Velg tallet du vil dele på">
+        ${DIVISORS.map(divisor => {
+          const progress = practice.progress[divisor];
+          return `<button class="times-table-card${progress?.best === 10 ? ' mastered' : ''}" data-action="${resumable && round.divisor === divisor ? 'division-resume' : 'division-start'}" data-divisor="${divisor}">
+            <span class="table-flower" aria-hidden="true">÷</span><span class="table-title">Del på ${divisor}</span>
+            <span class="table-example">${divisor * 3} ÷ ${divisor} = 3</span>
+            <span class="table-record">${resumable && round.divisor === divisor ? 'Fortsett runden →' : progress ? `Beste: ${progress.best} av 10 på egen hånd` : 'Klar til å dele!'}</span>
+          </button>`;
+        }).join('')}
+      </div>
+      <p class="garden-note">Deling og ganging hører sammen. 12 ÷ 3 = 4 fordi 3 × 4 = 12.</p>
+    </main>
+  </div>${renderBottomNav()}`;
+}
+
+function renderDivision() {
+  const round = state.division.round;
+  if (!round) return renderDivisionTables();
+  const q = getDivisionQuestion(state.division);
+  const correct = round.feedback === 'correct';
+  const count = round.results.filter(result => result.independent).length;
+  let feedback = 'Skriv hvor mange hver gruppe får.';
+  if (correct && q) feedback = `Riktig! ${q.dividend} ÷ ${q.divisor} = ${q.answer}.`;
+  else if (round.feedback === 'wrong') feedback = 'Prøv igjen. Du kan bruke kurvene som hjelp.';
+  else if (round.feedback === 'invalid') feedback = 'Skriv et helt tall i svarfeltet først.';
+  return `<div class="screen screen-division">
+    <header class="sub-header"><button class="back-btn" data-action="division-tables" aria-label="Velg delestykker">←</button>
+      <h2>Del på ${round.divisor}</h2><span class="garden-counter">${round.results.length} av ${DIVISION_ROUND_SIZE} løst</span>
+    </header>
+    <main class="division-main">
+      <div class="division-intro"><span aria-hidden="true">🧺</span><h1>${round.complete ? 'Alle fikk like mye!' : 'Hvor mye får hver?'}</h1></div>
+      <div class="progress-dots division-dots" role="img" aria-label="${round.results.length} av 10 oppgaver løst">${Array.from({length:10}, (_, i) => `<span class="pdot${i < round.results.length ? ' done' : i === round.index ? ' current' : ''}"></span>`).join('')}</div>
+      ${round.complete ? `<section class="multiplication-card multiplication-summary">
+        <h2 id="division-result" tabindex="-1">Du klarte alle 10!</h2>
+        <p><strong>${count} av 10</strong> på første forsøk uten hjelp.</p>
+        <p>Godt jobbet! Du blir tryggere for hver runde.</p>
+        <details class="multiplication-review"><summary>Se delestykkene dine</summary><ul>${round.results.map(result => `<li><strong>${result.dividend} ÷ ${round.divisor} = ${result.answer}</strong><span>${result.independent ? 'På egen hånd' : 'Med litt øving'}</span></li>`).join('')}</ul></details>
+        <button class="garden-primary" data-action="division-start" data-divisor="${round.divisor}">Del på ${round.divisor} igjen</button>
+        <button class="garden-secondary" data-action="division-tables">Velg andre delestykker</button>
+      </section>` : `<section class="multiplication-card">
+        <p class="garden-eyebrow">OPPGAVE ${round.index + 1} AV 10</p>
+        <div class="multiplication-equation" aria-label="${q.dividend} delt på ${q.divisor}">${q.dividend} <span>÷</span> ${q.divisor} <span>=</span> <strong>${correct ? q.answer : '?'}</strong></div>
+        <p class="division-explanation">Fordel ${q.dividend} epler likt i ${q.divisor} ${q.divisor === 1 ? 'kurv' : 'kurver'}. Hvor mange epler blir det i hver?</p>
+        <p class="multiplication-feedback ${correct ? 'is-correct' : ''}" id="division-feedback" role="status">${feedback}</p>
+        ${correct ? `<button class="garden-primary" data-action="division-next">${round.results.length === 10 ? 'Se resultatet' : 'Neste oppgave'} →</button>` : `
+          <form id="division-form" class="division-form" novalidate>
+            <label for="division-answer">Svaret ditt</label><div class="multiplication-answer-row">
+              <input id="division-answer" name="answer" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="3" autocomplete="off" enterkeyhint="done" aria-describedby="division-feedback" ${['wrong','invalid'].includes(round.feedback) ? 'aria-invalid="true"' : ''} />
+              <button type="submit" class="garden-primary">Sjekk svar →</button>
+            </div>
+          </form>
+          <button class="garden-secondary" data-action="division-hint" aria-expanded="${round.hintUsed}" aria-controls="division-hint">💡 Vis meg med kurver</button>
+          ${round.hintUsed ? `<div class="multiplication-hint" id="division-hint"><p>${q.dividend} epler fordelt i ${q.divisor} like grupper. Tell eplene i én kurv.</p>
+            <div class="division-baskets" role="img" aria-label="${q.divisor} kurver med ${q.answer} epler i hver">${Array.from({length:q.divisor}, () => `<div class="division-basket" aria-hidden="true">${'<span>🍎</span>'.repeat(q.answer)}</div>`).join('')}</div>
+          </div>` : ''}
         `}
       </section>`}
     </main>
@@ -607,6 +712,7 @@ function renderProgress() {
     { key: 'addition', label: 'Addisjon', emoji: '➕', color: '#7C3AED', description: `${Object.keys(state.levelStars).length} av ${LEVEL_COUNT} nivåer fullført`, action: 'continue' },
     { key: 'subtraction', label: 'Minus', emoji: '➖', color: '#2782B1', description: `${Object.keys(state.subtraction.levels.stars).length} av ${SUBTRACTION_LEVEL_COUNT} nivåer fullført`, action: 'subtraction-open' },
     { key: 'multiplication', label: 'Gangehagen', emoji: '🌻', color: '#15803D', description: 'Beste resultater i alle tabellene, på første forsøk uten hjelp', action: 'multiplication-tables' },
+    { key: 'division', label: 'Deling', emoji: '÷', color: '#B45309', description: 'Beste resultater for del på 1–10, på første forsøk uten hjelp', action: 'division-tables' },
   ].map(r => `
     <div class="skill-row">
       <span class="skill-emoji" aria-hidden="true">${r.emoji}</span>
@@ -795,6 +901,8 @@ function renderParent() {
           <div class="report-row"><span>Nåværende nivå</span><strong>${state.currentLevelIndex + 1}</strong></div>
           <div class="report-row"><span>Gangetabeller øvd på</span><strong>${Object.keys(state.multiplication.progress).length} / 10</strong></div>
           <div class="report-row"><span>Gange på egen hånd</span><strong>${getSkillProgress(state).multiplication}%</strong></div>
+          <div class="report-row"><span>Deling øvd på</span><strong>${Object.keys(state.division.progress).length} / 10</strong></div>
+          <div class="report-row"><span>Deling på egen hånd</span><strong>${getSkillProgress(state).division}%</strong></div>
           <div class="report-row"><span>Fullførte minusrunder</span><strong>${state.subtraction.progress.rounds}</strong></div>
           <div class="report-row"><span>Fullførte minusnivåer</span><strong>${Object.keys(state.subtraction.levels.stars).length} / ${SUBTRACTION_LEVEL_COUNT}</strong></div>
           <div class="report-row"><span>Stjerner i minus</span><strong>${Object.values(state.subtraction.levels.stars).reduce((sum, stars) => sum + stars, 0)}</strong></div>
@@ -803,7 +911,7 @@ function renderParent() {
 
         <section class="parent-section">
           <h3>Om appen</h3>
-          <p class="parent-text">Mattelek øver på addisjon med tallhjul, minus og gangetabellene fra 1 til 10. Addisjon og minus har 80 nivåer hver, med 10 oppgaver per nivå og tall som gradvis øker til 160. I minus gir en runde uten feil tre stjerner, opptil tre feil gir to, og alle fullførte nivåer gir minst én. Beste resultat beholdes når barnet øver igjen.</p>
+          <p class="parent-text">Mattelek øver på addisjon, minus, ganging og deling. Addisjon og minus har 80 nivåer hver, med 10 oppgaver per nivå og tall som gradvis øker til 160. Ganging og deling øver på tallene 1–10. Delestykkene går alltid opp. Etter en gangerunde kan barnet repetere stykkene som trengte hjelp, eller tre stykker fra en feilfri runde. Repetisjonen påvirker ikke rekordene. Beste resultat beholdes når barnet øver igjen.</p>
         </section>
 
         <button class="reset-btn" data-action="reset-progress">Nullstill all fremgang</button>
@@ -822,6 +930,8 @@ function renderScreen() {
     case 'subtraction-levels': return renderLevelSelect('subtraction');
     case 'tables':   return renderMultiplicationTables();
     case 'multiplication': return renderMultiplication();
+    case 'division-tables': return renderDivisionTables();
+    case 'division': return renderDivision();
     case 'subtraction': return renderSubtraction();
     case 'progress': return renderProgress();
     case 'rewards':  return renderRewards();
@@ -938,6 +1048,14 @@ function attachEvents() {
     event.preventDefault();
     checkSubtractionAnswer(document.getElementById('subtraction-answer').value, true);
   });
+  document.getElementById('division-form')?.addEventListener('submit', event => {
+    event.preventDefault();
+    const answer = document.getElementById('division-answer').value;
+    const practice = submitDivisionAnswer(state.division, answer);
+    if (practice.round.feedback === 'correct' || practice.round.feedback === 'wrong') playSound(practice.round.feedback);
+    setState(updateDivision(state, practice));
+    focusDivision(answer);
+  });
   document.getElementById('parent-form')?.addEventListener('submit', event => {
     event.preventDefault();
     handleAction('unlock-parent');
@@ -967,6 +1085,17 @@ function focusMultiplication(answer = '') {
   }
 }
 
+function focusDivision(answer = '') {
+  const input = document.getElementById('division-answer');
+  if (input) {
+    input.value = answer;
+    input.focus();
+    input.select();
+  } else {
+    (document.getElementById('division-result') ?? app.querySelector('[data-action="division-next"]'))?.focus();
+  }
+}
+
 function focusSubtraction() {
   const target = document.getElementById('subtraction-result')
     ?? document.getElementById('subtraction-question');
@@ -993,6 +1122,36 @@ function checkSubtractionAnswer(answer, fromInput = false) {
 
 function handleAction(action, el) {
   switch (action) {
+    case 'division-tables':
+      setState(goToScreen(state, 'division-tables'));
+      break;
+    case 'division-start':
+      setState(updateDivision(goToScreen(state, 'division'), startDivisionRound(state.division, Number(el.dataset.divisor), Date.now())));
+      focusDivision();
+      break;
+    case 'division-resume':
+      setState(goToScreen(state, 'division'));
+      focusDivision();
+      break;
+    case 'division-next': {
+      const practice = nextDivisionQuestion(state.division);
+      if (practice === state.division) break;
+      if (practice.round.complete) pendingCelebrate = true;
+      setState(updateDivision(state, practice));
+      focusDivision();
+      break;
+    }
+    case 'division-hint': {
+      const answer = document.getElementById('division-answer')?.value ?? '';
+      playSound('hint');
+      setState(updateDivision(state, requestDivisionHint(state.division)));
+      focusDivision(answer);
+      break;
+    }
+    case 'multiplication-repeat':
+      setState(updateMultiplication(state, startMultiplicationReview(state.multiplication)));
+      focusMultiplication();
+      break;
     case 'subtraction-levels':
       setState(goToScreen(state, 'subtraction-levels'));
       break;
@@ -1141,12 +1300,12 @@ function handleAction(action, el) {
 
     case 'next-puzzle':
       setState(nextPuzzle(state));
-      app.querySelector('.wheel-slice')?.focus({ preventScroll: true });
+      if (keyboardNavigation) app.querySelector('.wheel-slice')?.focus({ preventScroll: true });
       break;
 
     case 'next-level':
       setState(nextLevel(state));
-      app.querySelector('.wheel-slice')?.focus({ preventScroll: true });
+      if (keyboardNavigation) app.querySelector('.wheel-slice')?.focus({ preventScroll: true });
       break;
 
     case 'unlock-parent': {

@@ -203,6 +203,7 @@ body {
 .btn-continue { --activity-bg: #F5F0FF; --activity-border: #DED1F5; --activity-ink: #5925A4; --activity-accent: #7134CB; }
 .btn-subtraction { --activity-bg: #EFF9FF; --activity-border: #C7E3F2; --activity-ink: #205574; --activity-accent: #286F9C; }
 .btn-multiplication { --activity-bg: #F1F9EE; --activity-border: #CFE4C7; --activity-ink: #2F5E36; --activity-accent: #237541; }
+.btn-division { --activity-bg: #FFF6E8; --activity-border: #F1D7AF; --activity-ink: #854511; --activity-accent: #A65312; }
 .activity-symbol { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 17px; background: var(--activity-accent); color: white; font-size: 2.5rem; font-weight: 800; line-height: 1; }
 .activity-copy { min-width: 0; }
 .btn-label { display: block; font-size: 1.3rem; font-weight: 900; }
@@ -1021,7 +1022,7 @@ body {
   .home-intro { margin: 16px 0 28px; }
 
   .home-menu {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 18px;
   }
 
@@ -1542,7 +1543,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
   outline: 3px solid #0369A1;
   outline-offset: 3px;
 }
-.wheel-slice:focus-visible { outline: none; stroke: #1F2937; stroke-width: 5; }
+.wheel-slice:focus, .wheel-slice:focus-visible { outline: none; }
+.keyboard-navigation .wheel-slice:focus { stroke: #1F2937; stroke-width: 5; }
 .wheel-slice[aria-disabled="true"] { cursor: default; }
 .wheel-slice[aria-disabled="true"]:hover { filter: none; }
 h1[tabindex="-1"]:focus, h2[tabindex="-1"]:focus, .level-name:focus { outline: none; }
@@ -1589,4 +1591,46 @@ h1[tabindex="-1"]:focus, h2[tabindex="-1"]:focus, .level-name:focus { outline: n
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+
+/* Division shares the answer controls, with a warm basket theme. */
+.nav-icon.nav-divide { font: 900 2rem / 1 var(--font); color: #A65312; }
+.screen-division { background: linear-gradient(150deg, #FFF8E9, #FFFDF8); }
+.screen-division .sub-header h2, .screen-division .garden-counter,
+.screen-division .tables-intro h1, .screen-division .multiplication-equation,
+.screen-division .multiplication-summary h2 { color: #854511; }
+.screen-division .multiplication-equation strong { color: #A65312; }
+.screen-division .times-table-card { border-color: #EBD7B8; box-shadow: 0 4px 0 #EBD7B8; color: #854511; }
+.screen-division .times-table-card.mastered, .screen-division .garden-resume { background: #FFF0D6; color: #854511; border-color: #D8B885; }
+.screen-division .garden-primary { background: #A65312; border-color: #A65312; }
+.screen-division .garden-primary:hover { background: #854511; border-color: #854511; }
+.screen-division .garden-secondary { background: #FFF8EC; border-color: #EBD7B8; color: #854511; }
+.division-main { width: min(100%, 580px); margin: auto; padding: 24px 20px 32px; }
+.division-intro { text-align: center; margin-bottom: 16px; }
+.division-intro > span { font-size: 2.5rem; }
+.division-intro h1 { color: #854511; font-size: 1.5rem; margin-top: 8px; }
+.division-dots { justify-content: center; margin-bottom: 20px; }
+.division-dots .current { background: #A65312; }
+.division-explanation { color: #66513B; font-weight: 600; line-height: 1.6; font-size: 0.95rem; margin-bottom: 12px; }
+.division-form label { display: block; color: #66513B; font-size: 0.85rem; font-weight: 800; margin-bottom: 6px; }
+#division-answer { width: 90px; min-width: 0; padding: 9px; border: 2px solid #CBA777; border-radius: 14px; font: 900 1.6rem var(--font); text-align: center; color: #854511; background: #FFFCF6; }
+#division-answer[aria-invalid="true"] { border-color: #B45309; }
+.division-baskets { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 10px; margin-top: 12px; }
+.division-basket { display: flex; align-content: center; justify-content: center; flex-wrap: wrap; gap: 3px; padding: 10px 6px; min-height: 54px; background: #FFF1D6; border: 2px solid #CBA777; border-bottom-width: 6px; border-radius: 8px 8px 20px 20px; }
+.division-basket span { font-size: 1rem; line-height: 1.4; }
+.review-note { font-size: 0.8rem !important; }
+.wheel-svg { -webkit-touch-callout: none; }
+
+@media (min-width: 1024px) { .home-menu { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 480px) {
+  .bottom-nav .nav-btn { min-width: 44px; }
+  .bottom-nav .nav-label { font-size: 0.6rem; }
+  .home-menu { gap: 12px; }
+  .home-menu .menu-btn { padding-block: 12px; }
+  .division-main { padding: 14px 12px 24px; margin: 0 auto; }
+  .division-intro { margin-bottom: 12px; }
+  .division-intro > span { font-size: 1.8rem; }
+  .division-intro h1 { font-size: 1.2rem; margin-top: 4px; }
+  .division-dots { margin-bottom: 14px; }
+  .division-explanation { font-size: 0.85rem; }
 }

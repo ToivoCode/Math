@@ -15,6 +15,7 @@ import {
   unlockProgressToLevel,
   updateMultiplication,
   updateSubtraction,
+  updateDivision,
   goToScreen,
   resetProgress,
   selectPiece, undoLast, submitAnswer, requestHint, nextPuzzle, nextLevel,
@@ -24,6 +25,7 @@ import {
   TIMES_TABLES, createMultiplication, startMultiplicationRound,
   getMultiplicationQuestion, submitMultiplicationAnswer,
   requestMultiplicationHint, nextMultiplicationQuestion,
+  startMultiplicationReview,
 } from '../www/src/engine/multiplication.js';
 import {
   SUBTRACTION_ROUND_SIZE, createSubtraction, startSubtractionRound,
@@ -31,6 +33,10 @@ import {
   SUBTRACTION_LEVEL_COUNT, getSubtractionLevelMax, getUnlockedSubtractionLevel,
   isSubtractionLevelUnlocked, unlockSubtractionToLevel,
 } from '../www/src/engine/subtraction.js';
+import {
+  DIVISORS, createDivision, startDivisionRound, getDivisionQuestion,
+  submitDivisionAnswer, requestDivisionHint, nextDivisionQuestion, getDivisionProgress,
+} from '../www/src/engine/division.js';
 
 function minimumSolutionSize(puzzle) {
   for (let size = 1; size <= puzzle.pieces.length; size++) {
@@ -121,9 +127,9 @@ describe('game rules', () => {
     };
 
     assert.equal(getSkillProgress(createGame()).addition, 0);
-    assert.deepEqual(getSkillProgress(level10State), { addition: 11, subtraction: 0, multiplication: 0 });
+    assert.deepEqual(getSkillProgress(level10State), { addition: 11, subtraction: 0, multiplication: 0, division: 0 });
     assert.equal(getSkillProgress({ ...completedState, levelStars: { ...completedState.levelStars, 79: 0 } }).addition, 99);
-    assert.deepEqual(getSkillProgress(completedState), { addition: 100, subtraction: 0, multiplication: 0 });
+    assert.deepEqual(getSkillProgress(completedState), { addition: 100, subtraction: 0, multiplication: 0, division: 0 });
   });
 
   it('keeps addition feedback and hints when visiting other activities', () => {
@@ -225,6 +231,102 @@ describe('game rules', () => {
     }
 
     assert.deepEqual([...solutionSizes].sort((a, b) => a - b), [2, 3, 4]);
+  });
+});
+
+describe('division rules', () => {
+  function solveRound(practice) {
+    while (!practice.round.complete) {
+      practice = submitDivisionAnswer(practice, getDivisionQuestion(practice).answer);
+      practice = nextDivisionQuestion(practice);
+    }
+    return practice;
+  }
+
+  it('covers exact division by 1–10 with ten unique whole-number answers per round', () => {
+    let practice = createDivision();
+    for (const divisor of DIVISORS) {
+      practice = startDivisionRound(practice, divisor, 42);
+      assert.deepEqual([...practice.round.quotients].sort((a, b) => a - b), DIVISORS);
+      for (let index = 0; index < 10; index++) {
+        const question = getDivisionQuestion(practice);
+        assert.equal(question.divisor, divisor);
+        assert.equal(question.dividend / divisor, question.answer);
+        assert.ok(question.dividend >= 1 && question.dividend <= 100);
+        assert.equal(nextDivisionQuestion(practice), practice);
+        practice = submitDivisionAnswer(practice, String(question.answer));
+        assert.equal(submitDivisionAnswer(practice, question.answer), practice);
+        assert.equal(requestDivisionHint(practice), practice);
+        practice = nextDivisionQuestion(practice);
+      }
+      assert.deepEqual(practice.progress[divisor], { rounds: 1, best: 10 });
+      assert.equal(getDivisionQuestion(practice), null);
+      assert.equal(nextDivisionQuestion(practice), practice);
+      assert.equal(submitDivisionAnswer(practice, 1), practice);
+    }
+    assert.equal(getDivisionProgress(practice), 100);
+  });
+
+  it('rejects invalid divisors and inputs, and produces deterministic shuffled rounds', () => {
+    const idle = createDivision();
+    for (const divisor of [0, -1, 11, NaN, 1.5, '2']) assert.equal(startDivisionRound(idle, divisor), idle);
+    const practice = startDivisionRound(idle, 4, 42);
+    assert.deepEqual(practice, startDivisionRound(idle, 4, 42));
+    assert.notDeepEqual(practice.round.quotients, startDivisionRound(idle, 4, 43).round.quotients);
+    assert.equal(idle.round, null);
+    for (const input of ['', ' ', null, undefined, false, [1], NaN, '1.5', '-1', '1e1', '+1', '1000']) {
+      const invalid = submitDivisionAnswer(practice, input);
+      assert.equal(invalid.round.feedback, 'invalid');
+      assert.equal(invalid.round.wrongAttempts, 0);
+      assert.equal(nextDivisionQuestion(invalid), invalid);
+    }
+  });
+
+  it('allows correction and visual help without skipping or inflating first-attempt scores', () => {
+    const initial = startDivisionRound(createDivision(), 6, 8);
+    let practice = submitDivisionAnswer(initial, '0');
+    assert.equal(practice.round.feedback, 'wrong');
+    assert.equal(practice.round.results.length, 0);
+    practice = submitDivisionAnswer(practice, getDivisionQuestion(practice).answer);
+    assert.equal(practice.round.results[0].independent, false);
+    practice = nextDivisionQuestion(practice);
+    assert.equal(practice.round.wrongAttempts, 0);
+    practice = requestDivisionHint(practice);
+    assert.equal(practice.round.hintUsed, true);
+    practice = submitDivisionAnswer(practice, getDivisionQuestion(practice).answer);
+    assert.equal(practice.round.results[1].independent, false);
+    practice = nextDivisionQuestion(practice);
+    assert.equal(practice.round.hintUsed, false);
+    assert.deepEqual(practice.progress, {});
+    practice = solveRound(practice);
+    assert.deepEqual(practice.progress[6], { rounds: 1, best: 8 });
+    practice = solveRound(startDivisionRound(practice, 6, 9));
+    practice = solveRound(requestDivisionHint(startDivisionRound(practice, 6, 10)));
+    assert.deepEqual(practice.progress[6], { rounds: 3, best: 10 });
+    assert.equal(initial.round.wrongAttempts, 0);
+  });
+
+  it('loads old saves, validates division progress and persists independently', () => {
+    assert.deepEqual(createDivision({ 0: {rounds:1,best:10}, 1:{rounds:1,best:99}, 2:{rounds:-1,best:10}, 3:{rounds:1,best:'10'} }).progress, {1:{rounds:1,best:10},3:{rounds:1,best:0}});
+    withSavedState({ levelStars: {0:3}, totalStars: 3, multiplicationProgress: {5:{rounds:1,best:8}}, subtractionProgress:{rounds:1,best:9} }, () => {
+      let game = createGame();
+      assert.deepEqual(game.division, {progress:{},round:null});
+      let practice = startDivisionRound(game.division, 3, 4);
+      practice = submitDivisionAnswer(practice, getDivisionQuestion(practice).answer);
+      game = updateDivision(goToScreen(game, 'division'), practice);
+      assert.equal(goToScreen(goToScreen(game, 'home'), 'division').division, practice);
+      assert.deepEqual(createGame().division, {progress:{},round:null});
+      updateDivision(game, solveRound(practice));
+      const loaded = createGame();
+      assert.deepEqual(loaded.division.progress[3], {rounds:1,best:10});
+      assert.equal(loaded.division.round, null);
+      assert.deepEqual(loaded.levelStars, {0:3});
+      assert.deepEqual(loaded.multiplication.progress[5], {rounds:1,best:8});
+      assert.deepEqual(loaded.subtraction.progress, {rounds:1,best:9});
+      assert.equal(getSkillProgress(loaded).division, 10);
+      resetProgress();
+      assert.deepEqual(createGame().division, {progress:{},round:null});
+    });
   });
 });
 
@@ -496,6 +598,36 @@ describe('multiplication garden rules', () => {
     }
     return practice;
   }
+
+  it('repeats difficult multiplication facts after the round without changing records', () => {
+    let practice = startMultiplicationRound(createMultiplication(), 7, 42);
+    assert.equal(startMultiplicationReview(practice), practice);
+    const first = getMultiplicationQuestion(practice);
+    practice = submitMultiplicationAnswer(practice, 0);
+    practice = submitMultiplicationAnswer(practice, first.answer);
+    practice = nextMultiplicationQuestion(practice);
+    const second = getMultiplicationQuestion(practice);
+    practice = solveRound(requestMultiplicationHint(practice));
+    assert.deepEqual(practice.progress[7], { rounds: 1, best: 8 });
+    const review = startMultiplicationReview(practice);
+    assert.equal(review.round.isReview, true);
+    assert.deepEqual(review.round.factors, [first.factor, second.factor]);
+    const completed = solveRound(review);
+    assert.equal(completed.round.results.length, 2);
+    assert.equal(completed.round.complete, true);
+    assert.deepEqual(completed.progress, practice.progress);
+    assert.equal(nextMultiplicationQuestion(completed), completed);
+    assert.equal(practice.round.results.length, 10);
+  });
+
+  it('offers three recall questions after a perfect multiplication round', () => {
+    const completed = solveRound(startMultiplicationRound(createMultiplication(), 3, 9));
+    const review = startMultiplicationReview(completed);
+    assert.equal(review.round.factors.length, 3);
+    assert.equal(new Set(review.round.factors).size, 3);
+    assert.deepEqual(solveRound(review).progress[3], { rounds: 1, best: 10 });
+    assert.equal(startMultiplicationReview(createMultiplication()).round, null);
+  });
 
   it('opens all ten tables and covers factors 1 to 10 exactly once per round', () => {
     for (const table of TIMES_TABLES) {

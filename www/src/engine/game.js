@@ -1,6 +1,7 @@
 // Game state, rules, and transitions — no DOM access.
 import { createMultiplication, getMultiplicationProgress } from './multiplication.js';
 import { createSubtraction, getSubtractionProgress } from './subtraction.js';
+import { createDivision, getDivisionProgress } from './division.js';
 
 export const LEVEL_COUNT       = 80;
 export const PUZZLES_PER_LEVEL = 10;
@@ -274,6 +275,7 @@ function persist(state) {
       multiplicationProgress: state.multiplication.progress,
       subtractionProgress: state.subtraction.progress,
       subtractionLevels: state.subtraction.levels,
+      divisionProgress: state.division.progress,
     }));
   } catch { /* storage unavailable */ }
 }
@@ -290,6 +292,7 @@ export function createGame() {
   return {
     screen:             'home',
     multiplication:     createMultiplication(saved.multiplicationProgress),
+    division:           createDivision(saved.divisionProgress),
     subtraction:        createSubtraction(saved.subtractionProgress, saved.subtractionLevels),
     currentLevelIndex,
     currentPuzzleIndex,
@@ -481,6 +484,12 @@ export function updateMultiplication(state, multiplication) {
   return next;
 }
 
+export function updateDivision(state, division) {
+  const next = { ...state, division };
+  persist(next);
+  return next;
+}
+
 export function updateSubtraction(state, subtraction) {
   const next = { ...state, subtraction };
   persist(next);
@@ -508,5 +517,6 @@ export function getSkillProgress(state) {
     addition: Math.round((completedLevelCount / LEVEL_COUNT) * 100),
     subtraction: getSubtractionProgress(state.subtraction),
     multiplication: getMultiplicationProgress(state.multiplication),
+    division: getDivisionProgress(state.division),
   };
 }

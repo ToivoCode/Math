@@ -29,6 +29,7 @@ www/
     engine/
       game.js         game state, persistence, and addition rules
       multiplication.js  times-table rounds and progress rules
+      division.js     division rounds, equal-sharing hints, and progress rules
       subtraction.js  subtraction rounds, answer choices, and progress rules
 test/
   game.test.js        baseline regression tests
@@ -49,9 +50,12 @@ docs/
 - **Gangehagen** is a separate multiplication activity: choose any table from 1 to 10, type answers to ordinary multiplication questions, and grow a flower for each solved question.
 - A round contains all factors 1–10 exactly once in a shuffled order. Wrong answers can be retried; optional dot groups explain multiplication through equal groups. There is no timer.
 - Each table saves the number of completed rounds and the best number of answers correct on the first attempt without hints (out of 10). Multiplication progress is the sum of these ten best scores, shown as a percentage.
-- Completed progress is saved in localStorage. Active rounds can be resumed while the app remains open; reloading returns to the home screen and restarts an unfinished subtraction or multiplication round. Resetting progress clears all three activities. Older saves without subtraction data start at level 1.
-- The home screen presents three activity cards with start/resume actions. Navigation, question wording, and back controls are consistent; multiplication uses a × icon. Rewards and the main star badge describe their addition scope explicitly.
+- After a multiplication round, a short repetition round revisits questions that needed hints or retries. A perfect round offers three recall questions. Repetition has its own question count and does not change the completed round's score.
+- **Deling** offers divisors 1–10, with ten shuffled questions per round and whole-number answers 1–10. Wrong answers can be retried, and optional apple baskets illustrate equal sharing. Each divisor saves its best independent score and completed-round count; progress sums the ten best scores to a percentage.
+- Completed progress is saved in localStorage. Active rounds can be resumed while the app remains open; reloading returns to the home screen and restarts unfinished subtraction, multiplication, and division rounds. Resetting progress clears all four activities. Older saves without subtraction data start at level 1; missing division progress starts at zero.
+- The home screen presents four activity cards with start/resume actions. Navigation, question wording, and back controls are consistent; multiplication uses a × icon and division uses ÷. Rewards and the main star badge describe their addition scope explicitly.
 - The addition wheel supports keyboard selection, shows the selected sum, and preserves solved answers and hints across navigation. Solved questions cannot be edited or submitted again; finishing level 80 returns to level selection.
+- Pointer selection on the addition wheel suppresses the browser's rectangular SVG focus outline. Keyboard navigation retains a visible outline following the selected slice.
 - Responsive layouts cover narrow phones, tablets, and short landscape screens. Phone cards are compact, subtraction controls stay within reach, and scrollable play areas keep actions accessible. Browser zoom, visible keyboard focus, and reduced-motion preferences are supported.
 
 ## Notes

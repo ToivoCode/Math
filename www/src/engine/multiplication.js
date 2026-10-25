@@ -40,12 +40,27 @@ export function getMultiplicationQuestion(practice) {
   return { table: round.table, factor, answer: round.table * factor };
 }
 
+// Revisit difficult facts after a complete round; a perfect round gets three recall questions.
+export function startMultiplicationReview(practice) {
+  const previous = practice.round;
+  if (!previous?.complete) return practice;
+  const difficult = previous.results.filter(result => !result.independent).map(result => result.factor);
+  const factors = difficult.length ? difficult : previous.factors.slice(0, 3);
+  return {
+    ...practice,
+    round: {
+      table: previous.table, factors, index: 0, results: [], isReview: true,
+      feedback: null, wrongAttempts: 0, hintUsed: false, complete: false,
+    },
+  };
+}
+
 export function submitMultiplicationAnswer(practice, input) {
   const round = practice.round;
   const question = getMultiplicationQuestion(practice);
   if (!question || round.feedback === 'correct') return practice;
   const value = String(input).trim();
-  if (!/^\d{1,3}$/.test(value)) {
+  if (!['string', 'number'].includes(typeof input) || !/^\d{1,3}$/.test(value)) {
     return { ...practice, round: { ...round, feedback: 'invalid' } };
   }
   if (Number(value) !== question.answer) {
@@ -59,7 +74,7 @@ export function submitMultiplicationAnswer(practice, input) {
     independent: round.wrongAttempts === 0 && !round.hintUsed,
   }];
   let progress = practice.progress;
-  if (results.length === MULTIPLICATION_ROUND_SIZE) {
+  if (!round.isReview && results.length === MULTIPLICATION_ROUND_SIZE) {
     const previous = progress[round.table];
     const independentCount = results.filter(result => result.independent).length;
     progress = {
@@ -81,7 +96,7 @@ export function requestMultiplicationHint(practice) {
 export function nextMultiplicationQuestion(practice) {
   const round = practice.round;
   if (!round || round.complete || round.feedback !== 'correct') return practice;
-  if (round.results.length === MULTIPLICATION_ROUND_SIZE) {
+  if (round.results.length === round.factors.length) {
     return { ...practice, round: { ...round, complete: true } };
   }
   return {
