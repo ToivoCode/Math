@@ -421,7 +421,6 @@ body {
 .feedback-hint         { background: #FEF3C7; color: #78350F; }
 .feedback-empty        { background: transparent; }
 .addition-feedback { width: 100%; }
-.selection-summary { color: var(--c-primary-dark); font-size: 0.9rem; font-weight: 800; text-align: center; min-height: 1.5em; }
 .level-name small { display: block; font-size: 0.75rem; color: var(--c-muted); font-weight: 700; }
 .action-btn:disabled { opacity: 0.45; cursor: default; box-shadow: none; transform: none; }
 .feedback-emoji   { font-size: 1.3rem; }
@@ -1573,7 +1572,6 @@ h1[tabindex="-1"]:focus, h2[tabindex="-1"]:focus, .level-name:focus { outline: n
   .play-main .instruction { grid-column: 2; padding: 10px; font-size: 0.9rem; text-align: center; }
   .addition-feedback { grid-column: 2; }
   .addition-feedback .feedback { min-height: 0; padding: 10px; font-size: 0.85rem; }
-  .selection-summary { font-size: 0.8rem; }
 }
 
 @media (max-width: 380px) {

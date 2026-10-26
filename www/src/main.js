@@ -296,11 +296,6 @@ function renderHome() {
     ${renderBottomNav()}`;
 }
 
-function renderSelectedSum(puzzle) {
-  const numbers = [...state.selectedPieces].map(index => puzzle.pieces[index]);
-  return numbers.length ? `${numbers.join(' + ')} = ${numbers.reduce((sum, number) => sum + number, 0)}` : 'Trykk på tallene du vil legge sammen.';
-}
-
 function renderPlay() {
   const puzzle      = getCurrentPuzzle(state);
   const activeLevelIndex = getActiveLevelIndex(state);
@@ -381,7 +376,6 @@ function renderPlay() {
         <p class="instruction">${instruction}</p>
         <div class="wheel-container">
           ${renderWheel(puzzle, state.selectedPieces, state.feedback)}
-          <p class="selection-summary" aria-live="polite">${renderSelectedSum(puzzle)}</p>
         </div>
         <div class="addition-feedback" role="status">${feedbackHtml}</div>
       </main>
